@@ -151,6 +151,63 @@ security-scan: ## Run security scan with govulncheck
 	@go install golang.org/x/vuln/cmd/govulncheck@latest
 	@govulncheck ./...
 
+# Release targets
+.PHONY: build-all
+build-all: ## Build binaries for all platforms
+	@echo "Building for all platforms..."
+	@mkdir -p $(BUILD_DIR)/dist
+	@for os in linux darwin windows; do \
+		for arch in amd64 arm64; do \
+			if [ "$$os" = "windows" ] && [ "$$arch" = "arm64" ]; then continue; fi; \
+			ext=""; \
+			if [ "$$os" = "windows" ]; then ext=".exe"; fi; \
+			echo "Building $$os/$$arch..."; \
+			GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) \
+				-o $(BUILD_DIR)/dist/$(BINARY_NAME)-$$os-$$arch$$ext $(BINARY_PATH); \
+		done; \
+	done
+	@echo "All builds completed in $(BUILD_DIR)/dist/"
+
+.PHONY: release-snapshot
+release-snapshot: ## Create a snapshot release with goreleaser
+	@echo "Creating snapshot release..."
+	@goreleaser release --snapshot --rm-dist --skip-publish
+
+.PHONY: release-local
+release-local: ## Build release artifacts locally
+	@echo "Building release artifacts locally..."
+	@goreleaser build --snapshot --rm-dist
+
+.PHONY: install-goreleaser
+install-goreleaser: ## Install goreleaser
+	@echo "Installing goreleaser..."
+	@go install github.com/goreleaser/goreleaser@latest
+
+.PHONY: version
+version: ## Show current version information
+	@echo "Version Information:"
+	@echo "  Current: $(VERSION)"
+	@echo "  Commit:  $(COMMIT)"
+	@echo "  Built:   $(BUILD_TIME)"
+
+.PHONY: tag-release
+tag-release: ## Create and push a new release tag (usage: make tag-release VERSION=v1.0.0)
+ifndef VERSION
+	@echo "Usage: make tag-release VERSION=v1.0.0"
+	@exit 1
+endif
+	@echo "Creating release tag $(VERSION)..."
+	@git tag -a $(VERSION) -m "Release $(VERSION)"
+	@git push origin $(VERSION)
+	@echo "Tag $(VERSION) created and pushed"
+
+.PHONY: changelog
+changelog: ## Generate changelog since last tag
+	@echo "Generating changelog..."
+	@LAST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD"); \
+	echo "Changes since $$LAST_TAG:"; \
+	git log $$LAST_TAG..HEAD --oneline --pretty=format:"- %s"
+
 # Docker targets
 .PHONY: docker-run
 docker-run: build-docker ## Build and run Docker container

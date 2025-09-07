@@ -15,6 +15,13 @@ import (
 	"github.com/eduardoferro/k8s-memory-watch/internal/monitor"
 )
 
+// Version information (set during build with ldflags)
+var (
+	Version   = "dev"
+	Commit    = "unknown"
+	BuildTime = "unknown"
+)
+
 // Global variable to track if CSV header has been printed
 var csvHeaderPrinted = false
 
@@ -32,6 +39,7 @@ func main() {
 		labels          = flag.String("labels", "", "Comma-separated list of labels to display (e.g., dag_id,task_id,run_id)")
 		annotations     = flag.String("annotations", "", "Comma-separated list of annotations to display")
 		output          = flag.String("output", "table", "Output format (table, csv)")
+		version         = flag.Bool("version", false, "Show version information")
 		help            = flag.Bool("help", false, "Show help message")
 	)
 
@@ -54,6 +62,14 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if *version {
+		fmt.Printf("k8s-memory-watch\n")
+		fmt.Printf("Version: %s\n", Version)
+		fmt.Printf("Commit: %s\n", Commit)
+		fmt.Printf("Build Time: %s\n", BuildTime)
+		os.Exit(0)
+	}
 
 	if *help {
 		flag.Usage()

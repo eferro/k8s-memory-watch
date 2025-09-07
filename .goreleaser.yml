@@ -1,0 +1,168 @@
+project_name: k8s-memory-watch
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: k8s-memory-watch
+    main: ./cmd/k8s-memory-watch
+    binary: k8s-memory-watch
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.BuildTime={{.Date}}
+    flags:
+      - -trimpath
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: default
+    builds:
+      - k8s-memory-watch
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+      - examples/**/*
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: Bug Fixes
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Other Changes
+      order: 999
+
+release:
+  github:
+    owner: eduardoferro
+    name: k8s-memory-watch
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## k8s-memory-watch {{ .Tag }}
+    
+    A Kubernetes memory monitoring tool that helps you track and analyze memory usage across your cluster.
+    
+    ### Installation
+    
+    #### Linux/macOS (using curl)
+    ```bash
+    # Download and install latest version
+    curl -sfL https://raw.githubusercontent.com/eduardoferro/k8s-memory-watch/main/install.sh | sh
+    ```
+    
+    #### Manual Installation
+    1. Download the appropriate binary for your platform from the assets below
+    2. Extract the archive (tar.gz for Linux/macOS, zip for Windows)
+    3. Move the binary to a location in your PATH
+    4. Make it executable: `chmod +x k8s-memory-watch` (Linux/macOS)
+    
+    ### What's Changed
+  footer: |
+    **Full Changelog**: https://github.com/eduardoferro/k8s-memory-watch/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+dockers:
+  - id: k8s-memory-watch
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.description=Kubernetes memory monitoring tool"
+      - "--label=org.opencontainers.image.url=https://github.com/eduardoferro/k8s-memory-watch"
+      - "--label=org.opencontainers.image.source=https://github.com/eduardoferro/k8s-memory-watch"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.created={{date \"2006-01-02T15:04:05Z07:00\"}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--platform=linux/amd64"
+    image_templates:
+      - "ghcr.io/eduardoferro/k8s-memory-watch:{{ .Version }}-amd64"
+      - "ghcr.io/eduardoferro/k8s-memory-watch:latest-amd64"
+  - id: k8s-memory-watch-arm64
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.description=Kubernetes memory monitoring tool"
+      - "--label=org.opencontainers.image.url=https://github.com/eduardoferro/k8s-memory-watch"
+      - "--label=org.opencontainers.image.source=https://github.com/eduardoferro/k8s-memory-watch"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.created={{date \"2006-01-02T15:04:05Z07:00\"}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--platform=linux/arm64"
+    image_templates:
+      - "ghcr.io/eduardoferro/k8s-memory-watch:{{ .Version }}-arm64"
+      - "ghcr.io/eduardoferro/k8s-memory-watch:latest-arm64"
+
+docker_manifests:
+  - name_template: ghcr.io/eduardoferro/k8s-memory-watch:{{ .Version }}
+    image_templates:
+      - ghcr.io/eduardoferro/k8s-memory-watch:{{ .Version }}-amd64
+      - ghcr.io/eduardoferro/k8s-memory-watch:{{ .Version }}-arm64
+  - name_template: ghcr.io/eduardoferro/k8s-memory-watch:latest
+    image_templates:
+      - ghcr.io/eduardoferro/k8s-memory-watch:latest-amd64
+      - ghcr.io/eduardoferro/k8s-memory-watch:latest-arm64
+
+brews:
+  - name: k8s-memory-watch
+    tap:
+      owner: eduardoferro
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    folder: Formula
+    homepage: https://github.com/eduardoferro/k8s-memory-watch
+    description: "Kubernetes memory monitoring tool"
+    license: MIT
+    test: |
+      system "#{bin}/k8s-memory-watch --version"
+    dependencies:
+      - name: kubectl
+        type: optional
+    install: |
+      bin.install "k8s-memory-watch"
+
+announce:
+  skip: '{{ .Env.SKIP_ANNOUNCE }}'
