@@ -1,4 +1,4 @@
-module github.com/eduardoferro/mgmt-monitoring
+module github.com/eduardoferro/k8s-memory-watch
 
 go 1.22.2
 

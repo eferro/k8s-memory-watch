@@ -4,11 +4,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eduardoferro/mgmt-monitoring/internal/k8s"
+	"github.com/eduardoferro/k8s-memory-watch/internal/config"
+	"github.com/eduardoferro/k8s-memory-watch/internal/k8s"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestFormatPodInfo(t *testing.T) {
+	// Create empty config for testing (no labels/annotations to display)
+	cfg := &config.Config{
+		Labels:      []string{},
+		Annotations: []string{},
+	}
+
 	testCases := []struct {
 		name             string
 		pod              k8s.PodMemoryInfo
@@ -95,18 +102,18 @@ func TestFormatPodInfo(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := formatPodInfo(tc.pod)
+			result := formatPodInfo(tc.pod, cfg)
 
 			// Check if the expected symbol is present
 			if !strings.Contains(result, tc.expectedSymbol) {
-				t.Errorf("%s: Expected symbol '%s' not found in result: %s", 
+				t.Errorf("%s: Expected symbol '%s' not found in result: %s",
 					tc.description, tc.expectedSymbol, result)
 			}
 
 			// Check if all expected strings are present
 			for _, expected := range tc.expectedContains {
 				if !strings.Contains(result, expected) {
-					t.Errorf("%s: Expected string '%s' not found in result: %s", 
+					t.Errorf("%s: Expected string '%s' not found in result: %s",
 						tc.description, expected, result)
 				}
 			}
@@ -118,16 +125,22 @@ func TestFormatPodInfo(t *testing.T) {
 }
 
 func TestFormatPodInfo_NoMetricsOverridesStatus(t *testing.T) {
+	// Create empty config for testing (no labels/annotations to display)
+	cfg := &config.Config{
+		Labels:      []string{},
+		Annotations: []string{},
+	}
+
 	// Test that grey symbol (no metrics) takes precedence over pod status
 	testCases := []struct {
 		phase      string
 		ready      bool
 		shouldShow string
 	}{
-		{"Running", true, "⚪"},   // Would normally be green
-		{"Running", false, "⚪"},  // Would normally be red
-		{"Pending", false, "⚪"},  // Would normally be yellow
-		{"Failed", false, "⚪"},   // Would normally be red
+		{"Running", true, "⚪"},  // Would normally be green
+		{"Running", false, "⚪"}, // Would normally be red
+		{"Pending", false, "⚪"}, // Would normally be yellow
+		{"Failed", false, "⚪"},  // Would normally be red
 	}
 
 	for _, tc := range testCases {
@@ -140,10 +153,10 @@ func TestFormatPodInfo_NoMetricsOverridesStatus(t *testing.T) {
 				CurrentUsage: nil, // No metrics - this should override status
 			}
 
-			result := formatPodInfo(pod)
+			result := formatPodInfo(pod, cfg)
 
 			if !strings.Contains(result, tc.shouldShow) {
-				t.Errorf("Expected grey symbol ⚪ for phase=%s ready=%t, but got: %s", 
+				t.Errorf("Expected grey symbol ⚪ for phase=%s ready=%t, but got: %s",
 					tc.phase, tc.ready, result)
 			}
 		})

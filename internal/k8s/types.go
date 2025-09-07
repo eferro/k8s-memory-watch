@@ -27,6 +27,10 @@ type PodMemoryInfo struct {
 	// Pod status
 	Phase string `json:"phase"`
 	Ready bool   `json:"ready"`
+
+	// Metadata information
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // MemorySummary provides cluster-wide memory statistics

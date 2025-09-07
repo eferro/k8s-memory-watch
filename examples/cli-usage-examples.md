@@ -8,28 +8,28 @@ The Kubernetes Memory Monitoring tool now supports comprehensive command line fl
 
 ### Show Help
 ```bash
-./build/mgmt-monitoring --help
+./build/k8s-memory-watch --help
 ```
 
 ### Monitor Specific Namespace (Most Common)
 ```bash
 # Monitor production namespace only
-./build/mgmt-monitoring --namespace=production
+./build/k8s-memory-watch --namespace=production
 
 # Monitor kube-system namespace
-./build/mgmt-monitoring --namespace=kube-system
+./build/k8s-memory-watch --namespace=kube-system
 
 # Monitor default namespace
-./build/mgmt-monitoring --namespace=default
+./build/k8s-memory-watch --namespace=default
 ```
 
 ### Monitor All Namespaces
 ```bash
 # Explicitly monitor all namespaces
-./build/mgmt-monitoring --all-namespaces
+./build/k8s-memory-watch --all-namespaces
 
 # Default behavior (when no namespace specified) is also all namespaces
-./build/mgmt-monitoring
+./build/k8s-memory-watch
 ```
 
 ## 🔧 **Advanced Configuration**
@@ -37,22 +37,22 @@ The Kubernetes Memory Monitoring tool now supports comprehensive command line fl
 ### Custom Kubeconfig
 ```bash
 # Use specific kubeconfig file
-./build/mgmt-monitoring --kubeconfig=/path/to/your/kubeconfig
+./build/k8s-memory-watch --kubeconfig=/path/to/your/kubeconfig
 
 # Combine with namespace filtering
-./build/mgmt-monitoring --kubeconfig=/path/to/config --namespace=production
+./build/k8s-memory-watch --kubeconfig=/path/to/config --namespace=production
 ```
 
 ### In-Cluster Configuration
 ```bash
 # For running inside Kubernetes
-./build/mgmt-monitoring --in-cluster --namespace=monitoring
+./build/k8s-memory-watch --in-cluster --namespace=monitoring
 ```
 
 ### Custom Monitoring Parameters
 ```bash
 # Advanced configuration
-./build/mgmt-monitoring \
+./build/k8s-memory-watch \
     --namespace=production \
     --check-interval=1m \
     --memory-threshold=2048 \
@@ -83,11 +83,11 @@ The Kubernetes Memory Monitoring tool now supports comprehensive command line fl
 ### Mutually Exclusive Flags
 ```bash
 # ❌ This will fail:
-./build/mgmt-monitoring --namespace=prod --all-namespaces
+./build/k8s-memory-watch --namespace=prod --all-namespaces
 
 # ✅ Use one or the other:
-./build/mgmt-monitoring --namespace=prod
-./build/mgmt-monitoring --all-namespaces
+./build/k8s-memory-watch --namespace=prod
+./build/k8s-memory-watch --all-namespaces
 ```
 
 ### Default Behavior
@@ -98,7 +98,7 @@ The Kubernetes Memory Monitoring tool now supports comprehensive command line fl
 
 ### With Specific Namespace
 ```bash
-./build/mgmt-monitoring --namespace=production
+./build/k8s-memory-watch --namespace=production
 ```
 Will show only pods from the `production` namespace:
 ```
@@ -112,7 +112,7 @@ Namespace: production
 
 ### With All Namespaces
 ```bash
-./build/mgmt-monitoring --all-namespaces
+./build/k8s-memory-watch --all-namespaces
 ```
 Will show pods from all namespaces organized by namespace.
 
@@ -120,12 +120,12 @@ Will show pods from all namespaces organized by namespace.
 
 ### Before (Environment Variables)
 ```bash
-NAMESPACE=production KUBECONFIG=/path/to/config ./build/mgmt-monitoring
+NAMESPACE=production KUBECONFIG=/path/to/config ./build/k8s-memory-watch
 ```
 
 ### Now (CLI Flags - Recommended)
 ```bash
-./build/mgmt-monitoring --namespace=production --kubeconfig=/path/to/config
+./build/k8s-memory-watch --namespace=production --kubeconfig=/path/to/config
 ```
 
 Both work, but CLI flags take precedence and provide better UX.
@@ -134,27 +134,27 @@ Both work, but CLI flags take precedence and provide better UX.
 
 ### Development Environment
 ```bash
-./build/mgmt-monitoring --namespace=dev --log-level=debug
+./build/k8s-memory-watch --namespace=dev --log-level=debug
 ```
 
 ### Staging Environment
 ```bash
-./build/mgmt-monitoring --namespace=staging --check-interval=2m
+./build/k8s-memory-watch --namespace=staging --check-interval=2m
 ```
 
 ### Production Monitoring
 ```bash
-./build/mgmt-monitoring --namespace=production --memory-warning=85.0
+./build/k8s-memory-watch --namespace=production --memory-warning=85.0
 ```
 
 ### Full Cluster Overview
 ```bash
-./build/mgmt-monitoring --all-namespaces --log-level=info
+./build/k8s-memory-watch --all-namespaces --log-level=info
 ```
 
 ### In-Cluster Deployment
 ```bash
-./build/mgmt-monitoring --in-cluster --namespace=monitoring --check-interval=30s
+./build/k8s-memory-watch --in-cluster --namespace=monitoring --check-interval=30s
 ```
 
 ## 📊 **Output Symbols**

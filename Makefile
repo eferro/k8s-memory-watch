@@ -9,7 +9,7 @@ GOFMT=gofmt
 GOLINT=$(shell go env GOPATH)/bin/golangci-lint
 
 # Application parameters
-BINARY_NAME=mgmt-monitoring
+BINARY_NAME=k8s-memory-watch
 BINARY_PATH=./cmd/$(BINARY_NAME)
 BUILD_DIR=./build
 

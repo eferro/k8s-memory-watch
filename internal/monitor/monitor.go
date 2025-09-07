@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"sort"
 
-	"github.com/eduardoferro/mgmt-monitoring/internal/config"
-	"github.com/eduardoferro/mgmt-monitoring/internal/k8s"
+	"github.com/eduardoferro/k8s-memory-watch/internal/config"
+	"github.com/eduardoferro/k8s-memory-watch/internal/k8s"
 )
 
 // MemoryMonitor orchestrates memory monitoring operations

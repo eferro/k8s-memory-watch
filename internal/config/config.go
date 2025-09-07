@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,6 +24,10 @@ type Config struct {
 	// Logging configuration
 	LogLevel  string
 	LogFormat string
+
+	// Display configuration
+	Labels      []string // Labels to display for each pod
+	Annotations []string // Annotations to display for each pod
 }
 
 // CLIConfig holds command line argument values
@@ -35,6 +40,8 @@ type CLIConfig struct {
 	MemoryThresholdMB    int64
 	MemoryWarningPercent float64
 	LogLevel             string
+	Labels               string // Comma-separated list of labels to display
+	Annotations          string // Comma-separated list of annotations to display
 }
 
 // Load loads configuration from environment variables with sensible defaults
@@ -56,6 +63,8 @@ func LoadWithCLI(cli *CLIConfig) (*Config, error) {
 		MemoryWarningPercent: getEnvFloat("MEMORY_WARNING_PERCENT", 80.0),
 		LogLevel:             getEnv("LOG_LEVEL", "info"),
 		LogFormat:            getEnv("LOG_FORMAT", "json"),
+		Labels:               parseCommaSeparated(getEnv("LABELS", "")),
+		Annotations:          parseCommaSeparated(getEnv("ANNOTATIONS", "")),
 	}
 
 	// Apply CLI flags (they override environment variables)
@@ -83,6 +92,12 @@ func LoadWithCLI(cli *CLIConfig) (*Config, error) {
 		}
 		if cli.LogLevel != "" {
 			cfg.LogLevel = cli.LogLevel
+		}
+		if cli.Labels != "" {
+			cfg.Labels = parseCommaSeparated(cli.Labels)
+		}
+		if cli.Annotations != "" {
+			cfg.Annotations = parseCommaSeparated(cli.Annotations)
 		}
 	}
 
@@ -167,4 +182,20 @@ func getEnvFloat(key string, defaultValue float64) float64 {
 		}
 	}
 	return defaultValue
+}
+
+// parseCommaSeparated parses a comma-separated string into a slice of trimmed, non-empty strings
+func parseCommaSeparated(value string) []string {
+	if value == "" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

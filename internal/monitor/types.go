@@ -2,10 +2,12 @@ package monitor
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/eduardoferro/mgmt-monitoring/internal/k8s"
+	"github.com/eduardoferro/k8s-memory-watch/internal/config"
+	"github.com/eduardoferro/k8s-memory-watch/internal/k8s"
 )
 
 // MemoryReport contains the complete memory report for the cluster
@@ -46,7 +48,7 @@ func (r *MemoryReport) PrintSummary() {
 }
 
 // PrintDetailedReport prints detailed pod-by-pod memory information
-func (r *MemoryReport) PrintDetailedReport() {
+func (r *MemoryReport) PrintDetailedReport(cfg *config.Config) {
 	r.PrintSummary()
 
 	if len(r.Pods) == 0 {
@@ -64,13 +66,13 @@ func (r *MemoryReport) PrintDetailedReport() {
 			fmt.Printf("%s\n", strings.Repeat("-", 80))
 		}
 
-		fmt.Printf("  %s\n", formatPodInfo(pod))
+		fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 	}
 	fmt.Printf("\n")
 }
 
 // PrintAnalysis prints the analysis results with warnings and recommendations
-func (a *AnalysisResult) PrintAnalysis() {
+func (a *AnalysisResult) PrintAnalysis(cfg *config.Config) {
 	fmt.Printf("\n")
 	fmt.Printf("=== Memory Usage Analysis ===\n")
 
@@ -87,7 +89,7 @@ func (a *AnalysisResult) PrintAnalysis() {
 	if len(a.HighUsagePods) > 0 {
 		fmt.Printf("\n🔥 High Memory Usage Pods (%d):\n", len(a.HighUsagePods))
 		for _, pod := range a.HighUsagePods {
-			fmt.Printf("  %s\n", formatPodInfo(pod))
+			fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 		}
 	}
 
@@ -95,7 +97,7 @@ func (a *AnalysisResult) PrintAnalysis() {
 		fmt.Printf("\n⚠️  Warning Level Pods (%d):\n", len(a.WarningPods))
 		for _, pod := range a.WarningPods {
 			if !contains(a.HighUsagePods, pod) {
-				fmt.Printf("  %s\n", formatPodInfo(pod))
+				fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 			}
 		}
 	}
@@ -105,7 +107,7 @@ func (a *AnalysisResult) PrintAnalysis() {
 }
 
 // formatPodInfo formats a single pod's memory information
-func formatPodInfo(pod k8s.PodMemoryInfo) string {
+func formatPodInfo(pod k8s.PodMemoryInfo, cfg *config.Config) string {
 	pod.CalculateUsagePercent()
 
 	// Format pod state info for diagnostics
@@ -118,7 +120,7 @@ func formatPodInfo(pod k8s.PodMemoryInfo) string {
 	// If no memory metrics are available, show grey status (no info available)
 	if pod.CurrentUsage == nil {
 		status := "⚪"
-		return fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
+		baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
 			status,
 			fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
 			stateInfo,
@@ -128,6 +130,12 @@ func formatPodInfo(pod k8s.PodMemoryInfo) string {
 			k8s.FormatMemory(pod.MemoryLimit),
 			k8s.FormatPercent(pod.LimitUsagePercent),
 		)
+		// Add labels and annotations if requested
+		metadata := formatPodMetadata(pod, cfg)
+		if metadata != "" {
+			return fmt.Sprintf("%s\n%s", baseInfo, metadata)
+		}
+		return baseInfo
 	}
 
 	// Normal status logic when we have memory metrics
@@ -138,7 +146,7 @@ func formatPodInfo(pod k8s.PodMemoryInfo) string {
 		status = "🟡"
 	}
 
-	return fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
+	baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
 		status,
 		fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
 		stateInfo,
@@ -148,6 +156,13 @@ func formatPodInfo(pod k8s.PodMemoryInfo) string {
 		k8s.FormatMemory(pod.MemoryLimit),
 		k8s.FormatPercent(pod.LimitUsagePercent),
 	)
+
+	// Add labels and annotations if requested
+	metadata := formatPodMetadata(pod, cfg)
+	if metadata != "" {
+		return fmt.Sprintf("%s\n%s", baseInfo, metadata)
+	}
+	return baseInfo
 }
 
 // printRecommendations prints actionable recommendations based on the analysis
@@ -183,6 +198,76 @@ func printRecommendations(a *AnalysisResult) {
 	}
 
 	fmt.Printf("• Regular monitoring recommended with current threshold: %.1f%%\n", 80.0)
+}
+
+// formatPodMetadata formats labels and annotations for display based on configuration
+func formatPodMetadata(pod k8s.PodMemoryInfo, cfg *config.Config) string {
+	// Only show metadata if specifically requested
+	if len(cfg.Labels) == 0 && len(cfg.Annotations) == 0 {
+		return ""
+	}
+
+	var result strings.Builder
+
+	// Format requested labels
+	if requestedLabels := formatRequestedLabels(pod.Labels, cfg.Labels); len(requestedLabels) > 0 {
+		result.WriteString("      📏 Labels:")
+		for _, labelPair := range requestedLabels {
+			result.WriteString(fmt.Sprintf("\n        - %s", labelPair))
+		}
+	}
+
+	// Format requested annotations
+	requestedAnnotations := formatRequestedAnnotations(pod.Annotations, cfg.Annotations)
+	if len(requestedAnnotations) > 0 {
+		if result.Len() > 0 {
+			result.WriteString("\n") // Add separator if we already have labels
+		}
+		result.WriteString("      📝 Annotations:")
+		for _, annotationPair := range requestedAnnotations {
+			result.WriteString(fmt.Sprintf("\n        - %s", annotationPair))
+		}
+	}
+
+	return result.String()
+}
+
+// formatRequestedLabels extracts and formats only the requested labels from a pod
+func formatRequestedLabels(podLabels map[string]string, requestedLabels []string) []string {
+	if len(requestedLabels) == 0 || len(podLabels) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(requestedLabels))
+	for _, requestedLabel := range requestedLabels {
+		if value, exists := podLabels[requestedLabel]; exists {
+			result = append(result, fmt.Sprintf("%s: %s", requestedLabel, value))
+		}
+	}
+
+	sort.Strings(result) // Sort for consistent output
+	return result
+}
+
+// formatRequestedAnnotations extracts and formats only the requested annotations from a pod
+func formatRequestedAnnotations(podAnnotations map[string]string, requestedAnnotations []string) []string {
+	if len(requestedAnnotations) == 0 || len(podAnnotations) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(requestedAnnotations))
+	for _, requestedAnnotation := range requestedAnnotations {
+		if value, exists := podAnnotations[requestedAnnotation]; exists {
+			// Limit annotation values to prevent extremely long output
+			if len(value) > 80 {
+				value = value[:77] + "..."
+			}
+			result = append(result, fmt.Sprintf("%s: %s", requestedAnnotation, value))
+		}
+	}
+
+	sort.Strings(result) // Sort for consistent output
+	return result
 }
 
 // Helper functions

@@ -1,4 +1,4 @@
-# Kubernetes Management Monitoring
+# k8s-memory-watch
 
 A modern Go application for monitoring memory usage of pods and jobs in Kubernetes clusters, designed to proactively detect potential memory issues.
 
@@ -23,8 +23,8 @@ A modern Go application for monitoring memory usage of pods and jobs in Kubernet
 
 ```bash
 # Clone the repository
-git clone https://github.com/eduardoferro/mgmt-monitoring.git
-cd mgmt-monitoring
+git clone https://github.com/eduardoferro/k8s-memory-watch.git
+cd k8s-memory-watch
 
 # Set up development environment
 make local-setup
@@ -60,16 +60,16 @@ Use command line flags for the best experience:
 
 ```bash
 # Show all available options
-./build/mgmt-monitoring --help
+./build/k8s-memory-watch --help
 
 # Monitor specific namespace
-./build/mgmt-monitoring --namespace=production
+./build/k8s-memory-watch --namespace=production
 
 # Monitor all namespaces explicitly  
-./build/mgmt-monitoring --all-namespaces
+./build/k8s-memory-watch --all-namespaces
 
 # Custom configuration
-./build/mgmt-monitoring \
+./build/k8s-memory-watch \
     --namespace=kube-system \
     --check-interval=1m \
     --memory-threshold=2048 \
@@ -110,7 +110,7 @@ Command line flags take precedence over environment variables:
 ## Project Structure
 
 ```
-├── cmd/mgmt-monitoring/     # Application entry point
+├── cmd/k8s-memory-watch/    # Application entry point
 ├── internal/               # Private application code
 │   ├── config/            # Configuration management
 │   ├── k8s/               # Kubernetes client and operations

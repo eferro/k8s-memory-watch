@@ -189,11 +189,21 @@ func (c *Client) getNamespacePodsMemoryInfo(ctx context.Context, namespace strin
 // processPodMemoryInfo creates PodMemoryInfo from pod spec and metrics
 func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.PodMetrics) PodMemoryInfo {
 	podInfo := PodMemoryInfo{
-		Namespace: pod.Namespace,
-		PodName:   pod.Name,
-		Timestamp: time.Now(),
-		Phase:     string(pod.Status.Phase),
-		Ready:     c.isPodReady(pod),
+		Namespace:   pod.Namespace,
+		PodName:     pod.Name,
+		Timestamp:   time.Now(),
+		Phase:       string(pod.Status.Phase),
+		Ready:       c.isPodReady(pod),
+		Labels:      make(map[string]string),
+		Annotations: make(map[string]string),
+	}
+
+	// Copy pod labels and annotations
+	for k, v := range pod.Labels {
+		podInfo.Labels[k] = v
+	}
+	for k, v := range pod.Annotations {
+		podInfo.Annotations[k] = v
 	}
 
 	// Extract memory limits and requests from all containers
