@@ -108,12 +108,20 @@ func (a *AnalysisResult) PrintAnalysis() {
 func formatPodInfo(pod k8s.PodMemoryInfo) string {
 	pod.CalculateUsagePercent()
 
+	// Format pod state info for diagnostics
+	readyStatus := "Ready"
+	if !pod.Ready {
+		readyStatus = "NotReady"
+	}
+	stateInfo := fmt.Sprintf("[%s/%s]", pod.Phase, readyStatus)
+
 	// If no memory metrics are available, show grey status (no info available)
 	if pod.CurrentUsage == nil {
 		status := "⚪"
-		return fmt.Sprintf("%s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
+		return fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
 			status,
 			fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
+			stateInfo,
 			k8s.FormatMemory(pod.CurrentUsage),
 			k8s.FormatMemory(pod.MemoryRequest),
 			k8s.FormatPercent(pod.UsagePercent),
@@ -130,9 +138,10 @@ func formatPodInfo(pod k8s.PodMemoryInfo) string {
 		status = "🟡"
 	}
 
-	return fmt.Sprintf("%s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
+	return fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
 		status,
 		fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
+		stateInfo,
 		k8s.FormatMemory(pod.CurrentUsage),
 		k8s.FormatMemory(pod.MemoryRequest),
 		k8s.FormatPercent(pod.UsagePercent),

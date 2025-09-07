@@ -34,7 +34,7 @@ func TestFormatPodInfo(t *testing.T) {
 				}(),
 			},
 			expectedSymbol:   "⚪",
-			expectedContains: []string{"⚪", "default/test-pod", "Usage: N/A"},
+			expectedContains: []string{"⚪", "default/test-pod", "[Running/Ready]", "Usage: N/A"},
 			description:      "Pod without memory metrics should show grey symbol",
 		},
 		{
@@ -58,7 +58,7 @@ func TestFormatPodInfo(t *testing.T) {
 				}(),
 			},
 			expectedSymbol:   "🟢",
-			expectedContains: []string{"🟢", "production/healthy-pod"},
+			expectedContains: []string{"🟢", "production/healthy-pod", "[Running/Ready]"},
 			description:      "Running pod with metrics should show green symbol",
 		},
 		{
@@ -75,7 +75,7 @@ func TestFormatPodInfo(t *testing.T) {
 				}(),
 			},
 			expectedSymbol:   "⚪",
-			expectedContains: []string{"⚪", "default/pending-pod", "Usage: N/A"},
+			expectedContains: []string{"⚪", "default/pending-pod", "[Pending/NotReady]", "Usage: N/A"},
 			description:      "Pending pod without metrics should show grey symbol (not yellow)",
 		},
 		{
@@ -88,7 +88,7 @@ func TestFormatPodInfo(t *testing.T) {
 				CurrentUsage: nil, // No metrics available
 			},
 			expectedSymbol:   "⚪",
-			expectedContains: []string{"⚪", "default/failing-pod", "Usage: N/A"},
+			expectedContains: []string{"⚪", "default/failing-pod", "[Running/NotReady]", "Usage: N/A"},
 			description:      "Non-ready pod without metrics should show grey symbol (not red)",
 		},
 	}
