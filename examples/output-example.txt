@@ -1,0 +1,89 @@
+🚀 Ejemplo de Salida - Kubernetes Memory Monitoring
+====================================================
+
+=== Kubernetes Memory Report ===
+Generated at: 2025-09-07T10:15:30Z
+
+Cluster Overview:
+  Namespaces: 8
+  Total Pods: 23
+  Running Pods: 21
+  Pods with Metrics: 19
+  Pods with Limits: 15
+  Pods with Requests: 18
+
+Memory Totals:
+  Total Usage: 1.85 GB
+  Total Requests: 1.50 GB
+  Total Limits: 3.20 GB
+
+=== Detailed Pod Memory Information ===
+
+Namespace: kube-system
+--------------------------------------------------------------------------------
+  🟢 coredns-558bd4d5db-abc12 | Usage: 45.2 MB | Request: 70.0 MB (64.6%) | Limit: 170.0 MB (26.6%)
+  🟢 etcd-master | Usage: 120.5 MB | Request: 100.0 MB (120.5%) | Limit: N/A (N/A)
+  🟢 kube-apiserver-master | Usage: 235.8 MB | Request: 250.0 MB (94.3%) | Limit: 500.0 MB (47.2%)
+  🟢 kube-controller-manager-master | Usage: 89.2 MB | Request: 200.0 MB (44.6%) | Limit: 400.0 MB (22.3%)
+  🟢 kube-proxy-xyz34 | Usage: 28.1 MB | Request: N/A (N/A) | Limit: N/A (N/A)
+  🟢 kube-scheduler-master | Usage: 15.7 MB | Request: 100.0 MB (15.7%) | Limit: 200.0 MB (7.9%)
+
+Namespace: default
+--------------------------------------------------------------------------------
+  🟢 nginx-deployment-74b7f7d9c-gh67j | Usage: 12.5 MB | Request: 50.0 MB (25.0%) | Limit: 128.0 MB (9.8%)
+  🟢 nginx-deployment-74b7f7d9c-kl90m | Usage: 13.1 MB | Request: 50.0 MB (26.2%) | Limit: 128.0 MB (10.2%)
+  🔴 memory-hog-pod | Usage: 950.2 MB | Request: 1000.0 MB (95.0%) | Limit: 1024.0 MB (92.8%)
+
+Namespace: monitoring
+--------------------------------------------------------------------------------
+  🟢 prometheus-server-456def789 | Usage: 180.4 MB | Request: 200.0 MB (90.2%) | Limit: 400.0 MB (45.1%)
+  🟢 grafana-789ghi012 | Usage: 65.7 MB | Request: 100.0 MB (65.7%) | Limit: 200.0 MB (32.9%)
+  🟡 alertmanager-pending | Usage: N/A | Request: 50.0 MB (N/A) | Limit: 100.0 MB (N/A)
+
+Namespace: production
+--------------------------------------------------------------------------------
+  🟢 app-backend-v2-abc123 | Usage: 320.8 MB | Request: 500.0 MB (64.2%) | Limit: 800.0 MB (40.1%)
+  🟢 app-frontend-def456 | Usage: 85.3 MB | Request: 100.0 MB (85.3%) | Limit: 256.0 MB (33.3%)
+  🔴 worker-high-memory | Usage: 756.9 MB | Request: 800.0 MB (94.6%) | Limit: 1000.0 MB (75.7%)
+  🟢 redis-cache-789 | Usage: 142.1 MB | Request: N/A (N/A) | Limit: 300.0 MB (47.4%)
+
+
+=== Memory Usage Analysis ===
+🚨 Found 4 potential issues:
+
+1. Pod kube-system/etcd-master is using 120.5% of its memory request
+2. Pod default/memory-hog-pod is using 95.0% of its memory request  
+3. Pod production/worker-high-memory is using 94.6% of its memory request
+4. Pod production/redis-cache-789 has no memory request defined
+
+🔥 High Memory Usage Pods (3):
+  🟢 kube-system/etcd-master | Usage: 120.5 MB | Request: 100.0 MB (120.5%) | Limit: N/A (N/A)
+  🔴 default/memory-hog-pod | Usage: 950.2 MB | Request: 1000.0 MB (95.0%) | Limit: 1024.0 MB (92.8%)
+  🔴 production/worker-high-memory | Usage: 756.9 MB | Request: 800.0 MB (94.6%) | Limit: 1000.0 MB (75.7%)
+
+⚠️  Warning Level Pods (1):
+  🟢 monitoring/prometheus-server-456def789 | Usage: 180.4 MB | Request: 200.0 MB (90.2%) | Limit: 400.0 MB (45.1%)
+
+📋 Recommendations:
+• Set memory limits for 8 pods to prevent OOM kills and resource contention
+• Set memory requests for 5 pods to enable proper scheduling  
+• Monitor 3 high-usage pods closely - consider scaling or optimization
+• Regular monitoring recommended with current threshold: 80.0%
+
+EXPLICACIÓN DE LOS SÍMBOLOS:
+============================
+
+🟢 = Pod Running y Ready
+🔴 = Pod con problemas (alto uso memoria o no Ready)  
+🟡 = Pod Pending
+
+FORMATO DE CADA POD:
+==================
+[Estado] namespace/pod-name | Usage: [memoria actual] | Request: [solicitada] ([% uso vs request]) | Limit: [límite] ([% uso vs limit])
+
+DATOS MOSTRADOS:
+===============
+- Usage: Memoria RAM actualmente utilizada por el pod
+- Request: Memoria que el pod solicitó al cluster (% = uso actual / request * 100)
+- Limit: Límite máximo de memoria permitido (% = uso actual / limit * 100)
+- N/A: No definido (sin request o limit configurado)

@@ -94,13 +94,11 @@ func runMemoryCheck(ctx context.Context, memMonitor *monitor.MemoryMonitor) erro
 		return err
 	}
 
-	// Print the report to stdout (human-readable format)
-	analysis.Report.PrintSummary()
-
-	// If there are issues, print the analysis
-	if len(analysis.ProblemsFound) > 0 {
-		analysis.PrintAnalysis()
-	}
+	// Print the complete detailed report showing all pods
+	analysis.Report.PrintDetailedReport()
+	
+	// Always print analysis (warnings, recommendations)
+	analysis.PrintAnalysis()
 
 	// Log summary information structured
 	slog.Info("Memory check completed",
