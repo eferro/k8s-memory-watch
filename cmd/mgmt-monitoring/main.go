@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eduardoferro/mgmt-monitoring/internal/config"
+	"github.com/eduardoferro/mgmt-monitoring/internal/monitor"
 )
 
 func main() {
@@ -31,9 +32,23 @@ func main() {
 		"namespace", cfg.Namespace,
 		"check_interval", cfg.CheckInterval)
 
+	// Create memory monitor
+	memMonitor, err := monitor.New(cfg)
+	if err != nil {
+		log.Fatal("Failed to create memory monitor:", err)
+	}
+
 	// Set up context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Perform initial health check
+	slog.Info("Performing initial health check...")
+	if err := memMonitor.HealthCheck(ctx); err != nil {
+		slog.Error("Health check failed", "error", err)
+		cancel()
+		return
+	}
 
 	// Set up graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -45,8 +60,13 @@ func main() {
 		cancel()
 	}()
 
-	// Main application loop placeholder
+	// Main application loop
 	slog.Info("Starting monitoring loop...")
+
+	// Run initial collection and analysis
+	if err := runMemoryCheck(ctx, memMonitor); err != nil {
+		slog.Error("Initial memory check failed", "error", err)
+	}
 
 	ticker := time.NewTicker(cfg.CheckInterval)
 	defer ticker.Stop()
@@ -57,8 +77,40 @@ func main() {
 			slog.Info("Application shutdown complete")
 			return
 		case <-ticker.C:
-			// This is where the monitoring logic will go
-			slog.Info("Running memory check cycle...", "timestamp", time.Now().Format(time.RFC3339))
+			if err := runMemoryCheck(ctx, memMonitor); err != nil {
+				slog.Error("Memory check cycle failed", "error", err)
+			}
 		}
 	}
+}
+
+// runMemoryCheck executes a single cycle of memory monitoring and analysis
+func runMemoryCheck(ctx context.Context, memMonitor *monitor.MemoryMonitor) error {
+	slog.Info("Starting memory check cycle...", "timestamp", time.Now().Format(time.RFC3339))
+
+	// Perform memory analysis
+	analysis, err := memMonitor.AnalyzeMemoryUsage(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Print the report to stdout (human-readable format)
+	analysis.Report.PrintSummary()
+
+	// If there are issues, print the analysis
+	if len(analysis.ProblemsFound) > 0 {
+		analysis.PrintAnalysis()
+	}
+
+	// Log summary information structured
+	slog.Info("Memory check completed",
+		"total_pods", analysis.Report.Summary.TotalPods,
+		"running_pods", analysis.Report.Summary.RunningPods,
+		"problems_found", len(analysis.ProblemsFound),
+		"high_usage_pods", len(analysis.HighUsagePods),
+		"warning_pods", len(analysis.WarningPods),
+		"total_memory_usage", analysis.Report.Summary.TotalMemoryUsage.String(),
+	)
+
+	return nil
 }
