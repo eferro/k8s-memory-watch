@@ -14,8 +14,68 @@ import (
 
 // GetAllPodsMemoryInfo retrieves memory information for all pods across all namespaces
 func (c *Client) GetAllPodsMemoryInfo(ctx context.Context) ([]PodMemoryInfo, *MemorySummary, error) {
-	slog.Info("Starting to collect memory information for all pods")
+	return c.GetPodsMemoryInfo(ctx, "", true)
+}
 
+// GetPodsMemoryInfo retrieves memory information for pods
+// If namespace is empty and allNamespaces is true, gets all pods from all namespaces
+// If namespace is specified, gets pods only from that namespace
+func (c *Client) GetPodsMemoryInfo(ctx context.Context, namespace string, allNamespaces bool) (
+	[]PodMemoryInfo, *MemorySummary, error) {
+	if namespace != "" && allNamespaces {
+		return nil, nil, fmt.Errorf("cannot specify both namespace and allNamespaces")
+	}
+
+	if namespace != "" {
+		// Monitor specific namespace
+		slog.Info("Starting to collect memory information for specific namespace", "namespace", namespace)
+		return c.getSingleNamespacePodsMemoryInfo(ctx, namespace)
+	}
+
+	if allNamespaces {
+		// Monitor all namespaces
+		slog.Info("Starting to collect memory information for all namespaces")
+		return c.getAllNamespacesPodsMemoryInfo(ctx)
+	}
+
+	// Default behavior (should not reach here with current config logic)
+	return c.getAllNamespacesPodsMemoryInfo(ctx)
+}
+
+// getSingleNamespacePodsMemoryInfo gets memory info for pods in a single namespace
+func (c *Client) getSingleNamespacePodsMemoryInfo(ctx context.Context, namespace string) (
+	[]PodMemoryInfo, *MemorySummary, error) {
+	pods, nsUsage, err := c.getNamespacePodsMemoryInfo(ctx, namespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get pods for namespace %s: %w", namespace, err)
+	}
+
+	// Create summary for single namespace
+	summary := &MemorySummary{
+		Timestamp:          time.Now(),
+		NamespaceCount:     1,
+		TotalPods:          len(pods),
+		TotalMemoryUsage:   nsUsage.TotalMemoryUsage,
+		TotalMemoryLimit:   nsUsage.TotalMemoryLimit,
+		TotalMemoryRequest: nsUsage.TotalMemoryRequest,
+		RunningPods:        nsUsage.RunningPods,
+		PodsWithMetrics:    nsUsage.PodsWithMetrics,
+		PodsWithLimits:     nsUsage.PodsWithLimits,
+		PodsWithRequests:   nsUsage.PodsWithRequests,
+	}
+
+	slog.Info("Memory collection completed for namespace",
+		"namespace", namespace,
+		"total_pods", summary.TotalPods,
+		"running_pods", summary.RunningPods,
+		"pods_with_metrics", summary.PodsWithMetrics,
+		"total_usage", FormatMemory(&summary.TotalMemoryUsage))
+
+	return pods, summary, nil
+}
+
+// getAllNamespacesPodsMemoryInfo gets memory info for all namespaces
+func (c *Client) getAllNamespacesPodsMemoryInfo(ctx context.Context) ([]PodMemoryInfo, *MemorySummary, error) {
 	// Get all namespaces
 	namespaces, err := c.clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -34,8 +94,8 @@ func (c *Client) GetAllPodsMemoryInfo(ctx context.Context) ([]PodMemoryInfo, *Me
 	}
 
 	// Process each namespace
-	for _, ns := range namespaces.Items {
-		nsName := ns.Name
+	for i := range namespaces.Items {
+		nsName := namespaces.Items[i].Name
 		slog.Debug("Processing namespace", "namespace", nsName)
 
 		pods, nsUsage, err := c.getNamespacePodsMemoryInfo(ctx, nsName)
@@ -100,8 +160,9 @@ func (c *Client) getNamespacePodsMemoryInfo(ctx context.Context, namespace strin
 	}
 
 	// Process each pod
-	for _, pod := range pods.Items {
-		podInfo := c.processPodMemoryInfo(&pod, metricsMap[pod.Name])
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		podInfo := c.processPodMemoryInfo(pod, metricsMap[pod.Name])
 		podInfos = append(podInfos, podInfo)
 
 		// Update summary
@@ -139,7 +200,8 @@ func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.P
 	var totalRequest, totalLimit int64
 	hasRequest, hasLimit := false, false
 
-	for _, container := range pod.Spec.Containers {
+	for i := range pod.Spec.Containers {
+		container := &pod.Spec.Containers[i]
 		if container.Resources.Requests != nil {
 			if memReq, exists := container.Resources.Requests[corev1.ResourceMemory]; exists {
 				totalRequest += memReq.Value()

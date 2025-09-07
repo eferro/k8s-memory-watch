@@ -13,9 +13,13 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Verify defaults
-	if cfg.Namespace != "default" {
-		t.Errorf("Expected namespace 'default', got '%s'", cfg.Namespace)
+	// Verify defaults (now defaults to all namespaces)
+	if cfg.Namespace != "" {
+		t.Errorf("Expected empty namespace (all namespaces), got '%s'", cfg.Namespace)
+	}
+
+	if !cfg.AllNamespaces {
+		t.Error("Expected AllNamespaces to be true by default")
 	}
 
 	if cfg.CheckInterval != 30*time.Second {

@@ -43,11 +43,28 @@ func (m *MemoryMonitor) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// CollectMemoryInfo collects memory information from all pods
+// CollectMemoryInfo collects memory information from pods based on configuration
 func (m *MemoryMonitor) CollectMemoryInfo(ctx context.Context) (*MemoryReport, error) {
-	slog.Info("Starting memory information collection...")
+	slog.Info("Starting memory information collection...",
+		"target_namespace", m.config.Namespace,
+		"all_namespaces", m.config.AllNamespaces)
 
-	pods, summary, err := m.k8sClient.GetAllPodsMemoryInfo(ctx)
+	var pods []k8s.PodMemoryInfo
+	var summary *k8s.MemorySummary
+	var err error
+
+	switch {
+	case m.config.Namespace != "":
+		// Monitor specific namespace
+		pods, summary, err = m.k8sClient.GetPodsMemoryInfo(ctx, m.config.Namespace, false)
+	case m.config.AllNamespaces:
+		// Monitor all namespaces
+		pods, summary, err = m.k8sClient.GetPodsMemoryInfo(ctx, "", true)
+	default:
+		// Default to all namespaces
+		pods, summary, err = m.k8sClient.GetAllPodsMemoryInfo(ctx)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect memory info: %w", err)
 	}
@@ -68,7 +85,8 @@ func (m *MemoryMonitor) CollectMemoryInfo(ctx context.Context) (*MemoryReport, e
 	slog.Info("Memory collection completed successfully",
 		"total_pods", summary.TotalPods,
 		"running_pods", summary.RunningPods,
-		"namespaces", summary.NamespaceCount)
+		"namespaces", summary.NamespaceCount,
+		"target_namespace", m.config.Namespace)
 
 	return report, nil
 }

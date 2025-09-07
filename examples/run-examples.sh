@@ -5,51 +5,74 @@
 echo "🚀 Kubernetes Memory Monitoring - Usage Examples"
 echo "================================================"
 
-# Example 1: Default configuration (looks for ~/.kube/config)
-echo "
-1️⃣  Default configuration (uses ~/.kube/config):
+echo "📋 Command Line Flags (NEW! - override environment variables):"
+echo ""
+
+# Example 1: Show help
+echo "1️⃣  Show help and available options:
+    ./build/mgmt-monitoring --help
+"
+
+# Example 2: Monitor specific namespace (CLI flag)
+echo "2️⃣  Monitor specific namespace (recommended):
+    ./build/mgmt-monitoring --namespace=production
+    ./build/mgmt-monitoring --namespace=kube-system
+"
+
+# Example 3: Monitor all namespaces explicitly (CLI flag)
+echo "3️⃣  Monitor all namespaces explicitly:
+    ./build/mgmt-monitoring --all-namespaces
+"
+
+# Example 4: Custom kubeconfig with CLI flag
+echo "4️⃣  Custom kubeconfig file:
+    ./build/mgmt-monitoring --kubeconfig=/path/to/config
+    ./build/mgmt-monitoring --kubeconfig=/path/to/config --namespace=production
+"
+
+# Example 5: In-cluster configuration (CLI flag)
+echo "5️⃣  In-cluster configuration (for running inside K8s):
+    ./build/mgmt-monitoring --in-cluster --namespace=monitoring
+"
+
+# Example 6: Custom monitoring settings with CLI flags
+echo "6️⃣  Custom monitoring settings (CLI flags override env vars):
+    ./build/mgmt-monitoring \\
+        --namespace=production \\
+        --check-interval=1m \\
+        --memory-threshold=2048 \\
+        --memory-warning=75.0 \\
+        --log-level=debug
+"
+
+echo ""
+echo "🔧 Environment Variables (legacy support - lower priority):"
+echo ""
+
+# Example 7: Default configuration (looks for ~/.kube/config)
+echo "7️⃣  Default configuration (uses ~/.kube/config):
     ./build/mgmt-monitoring
 "
 
-# Example 2: Custom kubeconfig
-echo "
-2️⃣  Custom kubeconfig file:
+# Example 8: Custom kubeconfig via env var
+echo "8️⃣  Custom kubeconfig file (env var):
     KUBECONFIG=/path/to/your/kubeconfig ./build/mgmt-monitoring
 "
 
-# Example 3: In-cluster configuration (when running inside Kubernetes)
-echo "
-3️⃣  In-cluster configuration (for running inside K8s):
-    IN_CLUSTER=true ./build/mgmt-monitoring
-"
-
-# Example 4: Custom monitoring configuration
-echo "
-4️⃣  Custom monitoring settings:
-    CHECK_INTERVAL=1m \\
-    MEMORY_THRESHOLD_MB=2048 \\
-    MEMORY_WARNING_PERCENT=75.0 \\
-    LOG_LEVEL=debug \\
-    ./build/mgmt-monitoring
-"
-
-# Example 5: Monitor specific namespace
-echo "
-5️⃣  Monitor specific namespace:
+# Example 9: Monitor specific namespace via env var
+echo "9️⃣  Monitor specific namespace (env var):
     NAMESPACE=kube-system ./build/mgmt-monitoring
 "
 
-# Example 6: All configuration options
-echo "
-6️⃣  All configuration options:
-    NAMESPACE=default \\
+# Example 10: All configuration options via env vars
+echo "🔟 All configuration options (env vars):
+    NAMESPACE=production \\
     KUBECONFIG=~/.kube/config \\
     IN_CLUSTER=false \\
     CHECK_INTERVAL=30s \\
     MEMORY_THRESHOLD_MB=1024 \\
     MEMORY_WARNING_PERCENT=80.0 \\
     LOG_LEVEL=info \\
-    LOG_FORMAT=json \\
     ./build/mgmt-monitoring
 "
 

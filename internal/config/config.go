@@ -10,9 +10,10 @@ import (
 // Config holds all configuration for the application
 type Config struct {
 	// Kubernetes configuration
-	Namespace  string
-	KubeConfig string
-	InCluster  bool
+	Namespace     string
+	AllNamespaces bool // true if monitoring all namespaces explicitly
+	KubeConfig    string
+	InCluster     bool
 
 	// Monitoring configuration
 	CheckInterval        time.Duration
@@ -24,11 +25,30 @@ type Config struct {
 	LogFormat string
 }
 
+// CLIConfig holds command line argument values
+type CLIConfig struct {
+	Namespace            string
+	AllNamespaces        bool
+	KubeConfig           string
+	InCluster            bool
+	CheckInterval        time.Duration
+	MemoryThresholdMB    int64
+	MemoryWarningPercent float64
+	LogLevel             string
+}
+
 // Load loads configuration from environment variables with sensible defaults
 func Load() (*Config, error) {
+	return LoadWithCLI(nil)
+}
+
+// LoadWithCLI loads configuration from environment variables and CLI flags
+// CLI flags take precedence over environment variables
+func LoadWithCLI(cli *CLIConfig) (*Config, error) {
 	cfg := &Config{
-		// Default values
-		Namespace:            getEnv("NAMESPACE", "default"),
+		// Default values from environment variables
+		Namespace:            getEnv("NAMESPACE", ""),
+		AllNamespaces:        getEnvBool("ALL_NAMESPACES", false),
 		KubeConfig:           getEnv("KUBECONFIG", ""),
 		InCluster:            getEnvBool("IN_CLUSTER", false),
 		CheckInterval:        getEnvDuration("CHECK_INTERVAL", "30s"),
@@ -36,6 +56,41 @@ func Load() (*Config, error) {
 		MemoryWarningPercent: getEnvFloat("MEMORY_WARNING_PERCENT", 80.0),
 		LogLevel:             getEnv("LOG_LEVEL", "info"),
 		LogFormat:            getEnv("LOG_FORMAT", "json"),
+	}
+
+	// Apply CLI flags (they override environment variables)
+	if cli != nil {
+		if cli.Namespace != "" {
+			cfg.Namespace = cli.Namespace
+		}
+		if cli.AllNamespaces {
+			cfg.AllNamespaces = cli.AllNamespaces
+		}
+		if cli.KubeConfig != "" {
+			cfg.KubeConfig = cli.KubeConfig
+		}
+		if cli.InCluster {
+			cfg.InCluster = cli.InCluster
+		}
+		if cli.CheckInterval != 0 {
+			cfg.CheckInterval = cli.CheckInterval
+		}
+		if cli.MemoryThresholdMB != 0 {
+			cfg.MemoryThresholdMB = cli.MemoryThresholdMB
+		}
+		if cli.MemoryWarningPercent != 0 {
+			cfg.MemoryWarningPercent = cli.MemoryWarningPercent
+		}
+		if cli.LogLevel != "" {
+			cfg.LogLevel = cli.LogLevel
+		}
+	}
+
+	// Apply default behavior for namespace selection
+	if cfg.Namespace == "" && !cfg.AllNamespaces {
+		// If no specific namespace and not explicitly all-namespaces,
+		// default to all namespaces (Kubernetes-style behavior)
+		cfg.AllNamespaces = true
 	}
 
 	// Validate configuration

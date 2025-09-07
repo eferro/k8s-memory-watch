@@ -54,11 +54,51 @@ make test-unit
 
 ## Configuration
 
-The application is configured via environment variables:
+### Command Line Interface (Recommended)
+
+Use command line flags for the best experience:
+
+```bash
+# Show all available options
+./build/mgmt-monitoring --help
+
+# Monitor specific namespace
+./build/mgmt-monitoring --namespace=production
+
+# Monitor all namespaces explicitly  
+./build/mgmt-monitoring --all-namespaces
+
+# Custom configuration
+./build/mgmt-monitoring \
+    --namespace=kube-system \
+    --check-interval=1m \
+    --memory-threshold=2048 \
+    --memory-warning=75.0 \
+    --log-level=debug
+```
+
+**Available Command Line Flags:**
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--namespace` | string | Monitor specific namespace |
+| `--all-namespaces` | bool | Monitor all namespaces explicitly |
+| `--kubeconfig` | string | Path to kubeconfig file |
+| `--in-cluster` | bool | Use in-cluster configuration |
+| `--check-interval` | duration | Check interval (e.g., 30s, 1m) |
+| `--memory-threshold` | int | Memory threshold in MB |
+| `--memory-warning` | float | Memory warning percentage |
+| `--log-level` | string | Log level (debug, info, warn, error) |
+| `--help` | bool | Show help message |
+
+### Environment Variables (Legacy)
+
+Command line flags take precedence over environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NAMESPACE` | `default` | Kubernetes namespace to monitor |
+| `NAMESPACE` | (all namespaces) | Kubernetes namespace to monitor |
+| `ALL_NAMESPACES` | `true` | Monitor all namespaces |
 | `KUBECONFIG` | | Path to kubeconfig file (for out-of-cluster) |
 | `IN_CLUSTER` | `false` | Whether running inside Kubernetes cluster |
 | `CHECK_INTERVAL` | `30s` | How often to check memory usage |
