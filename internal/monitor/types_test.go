@@ -162,3 +162,87 @@ func TestFormatPodInfo_NoMetricsOverridesStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMemoryStatus(t *testing.T) {
+	cfg := &config.Config{
+		MemoryWarningPercent: 80.0,
+	}
+
+	tests := []struct {
+		name     string
+		pod      k8s.PodMemoryInfo
+		expected string
+	}{
+		{
+			name: "no data - no current usage",
+			pod: k8s.PodMemoryInfo{
+				CurrentUsage: nil,
+			},
+			expected: "no_data",
+		},
+		{
+			name: "no config - no request or limit",
+			pod: k8s.PodMemoryInfo{
+				CurrentUsage:  resource.NewQuantity(100*1024*1024, resource.BinarySI), // 100MB
+				MemoryRequest: nil,
+				MemoryLimit:   nil,
+			},
+			expected: "no_config",
+		},
+		{
+			name: "critical - high usage vs request",
+			pod: k8s.PodMemoryInfo{
+				CurrentUsage:  resource.NewQuantity(950*1024*1024, resource.BinarySI),  // 950MB
+				MemoryRequest: resource.NewQuantity(1000*1024*1024, resource.BinarySI), // 1000MB
+				MemoryLimit:   resource.NewQuantity(2000*1024*1024, resource.BinarySI), // 2000MB
+				Phase:         "Running",
+				Ready:         true,
+			},
+			expected: "critical",
+		},
+		{
+			name: "warning - above warning threshold",
+			pod: k8s.PodMemoryInfo{
+				CurrentUsage:  resource.NewQuantity(850*1024*1024, resource.BinarySI),  // 850MB
+				MemoryRequest: resource.NewQuantity(1000*1024*1024, resource.BinarySI), // 1000MB
+				MemoryLimit:   resource.NewQuantity(2000*1024*1024, resource.BinarySI), // 2000MB
+				Phase:         "Running",
+				Ready:         true,
+			},
+			expected: "warning",
+		},
+		{
+			name: "not ready - pod not ready",
+			pod: k8s.PodMemoryInfo{
+				CurrentUsage:  resource.NewQuantity(100*1024*1024, resource.BinarySI),  // 100MB
+				MemoryRequest: resource.NewQuantity(1000*1024*1024, resource.BinarySI), // 1000MB
+				MemoryLimit:   resource.NewQuantity(2000*1024*1024, resource.BinarySI), // 2000MB
+				Phase:         "Running",
+				Ready:         false,
+			},
+			expected: "not_ready",
+		},
+		{
+			name: "ok - normal operation",
+			pod: k8s.PodMemoryInfo{
+				CurrentUsage:  resource.NewQuantity(500*1024*1024, resource.BinarySI),  // 500MB
+				MemoryRequest: resource.NewQuantity(1000*1024*1024, resource.BinarySI), // 1000MB
+				MemoryLimit:   resource.NewQuantity(2000*1024*1024, resource.BinarySI), // 2000MB
+				Phase:         "Running",
+				Ready:         true,
+			},
+			expected: "ok",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Calculate usage percentages
+			tt.pod.CalculateUsagePercent()
+			result := getMemoryStatus(tt.pod, cfg)
+			if result != tt.expected {
+				t.Errorf("getMemoryStatus() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}

@@ -85,6 +85,7 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 		// Create dynamic header based on requested labels and annotations
 		header := []string{
 			"timestamp",
+			"memory_status",
 			"namespace",
 			"pod_name",
 			"phase",
@@ -116,6 +117,7 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 
 		record := []string{
 			r.Summary.Timestamp.Format(time.RFC3339),
+			getMemoryStatus(pod, cfg),
 			pod.Namespace,
 			pod.PodName,
 			pod.Phase,
@@ -164,6 +166,49 @@ func formatPercentForCSV(percent *float64) string {
 		return ""
 	}
 	return strconv.FormatFloat(*percent, 'f', 2, 64)
+}
+
+// getMemoryStatus determines the memory status of a pod for CSV output
+func getMemoryStatus(pod k8s.PodMemoryInfo, cfg *config.Config) string {
+	// No metrics available
+	if pod.CurrentUsage == nil {
+		return "no_data"
+	}
+
+	// Check for missing configurations first
+	if pod.MemoryRequest == nil && pod.MemoryLimit == nil {
+		return "no_config"
+	}
+
+	if pod.MemoryRequest == nil {
+		return "no_request"
+	}
+
+	if pod.MemoryLimit == nil {
+		return "no_limit"
+	}
+
+	// Critical level checks (highest priority)
+	if pod.UsagePercent != nil && *pod.UsagePercent >= 95.0 {
+		return "critical"
+	}
+
+	if pod.LimitUsagePercent != nil && *pod.LimitUsagePercent >= 90.0 {
+		return "critical"
+	}
+
+	// Warning level check
+	if pod.UsagePercent != nil && *pod.UsagePercent >= cfg.MemoryWarningPercent {
+		return "warning"
+	}
+
+	// Pod not running properly
+	if !pod.Ready || pod.Phase != "Running" {
+		return "not_ready"
+	}
+
+	// Everything looks good
+	return "ok"
 }
 
 // PrintAnalysis prints the analysis results with warnings and recommendations
