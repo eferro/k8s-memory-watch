@@ -15,6 +15,9 @@ import (
 	"github.com/eduardoferro/k8s-memory-watch/internal/monitor"
 )
 
+// Global variable to track if CSV header has been printed
+var csvHeaderPrinted = false
+
 func main() {
 	// Parse command line flags
 	var (
@@ -28,6 +31,7 @@ func main() {
 		logLevel        = flag.String("log-level", "", "Log level (debug, info, warn, error)")
 		labels          = flag.String("labels", "", "Comma-separated list of labels to display (e.g., dag_id,task_id,run_id)")
 		annotations     = flag.String("annotations", "", "Comma-separated list of annotations to display")
+		output          = flag.String("output", "table", "Output format (table, csv)")
 		help            = flag.Bool("help", false, "Show help message")
 	)
 
@@ -42,6 +46,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s --kubeconfig=/path/to/config --check-interval=1m\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --labels=dag_id,task_id,run_id\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --annotations=owner,team --labels=app\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --output=csv --labels=app,version > pods.csv\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --output=csv --all-namespaces > cluster-memory.csv\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nEnvironment Variables (lower priority than CLI flags):\n")
 		fmt.Fprintf(os.Stderr, "  NAMESPACE, KUBECONFIG, IN_CLUSTER, CHECK_INTERVAL,\n")
 		fmt.Fprintf(os.Stderr, "  MEMORY_THRESHOLD_MB, MEMORY_WARNING_PERCENT, LOG_LEVEL\n")
@@ -72,15 +78,8 @@ func main() {
 		LogLevel:             *logLevel,
 		Labels:               *labels,
 		Annotations:          *annotations,
+		Output:               *output,
 	}
-
-	// Set up structured logging
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
-
-	slog.Info("Starting Kubernetes Management Monitoring Application")
 
 	// Load configuration (combines env vars with CLI flags)
 	cfg, err := config.LoadWithCLI(cliConfig)
@@ -88,10 +87,18 @@ func main() {
 		log.Fatal("Failed to load configuration:", err)
 	}
 
-	slog.Info("Configuration loaded successfully",
-		"namespace", cfg.Namespace,
-		"all_namespaces", cfg.AllNamespaces,
-		"check_interval", cfg.CheckInterval)
+	// Set up structured logging (suppressed in CSV mode)
+	if cfg.Output != "csv" {
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
+		slog.SetDefault(logger)
+		slog.Info("Starting Kubernetes Management Monitoring Application")
+		slog.Info("Configuration loaded successfully",
+			"namespace", cfg.Namespace,
+			"all_namespaces", cfg.AllNamespaces,
+			"check_interval", cfg.CheckInterval)
+	}
 
 	// Create memory monitor
 	memMonitor, err := monitor.New(cfg)
@@ -104,9 +111,13 @@ func main() {
 	defer cancel()
 
 	// Perform initial health check
-	slog.Info("Performing initial health check...")
+	if cfg.Output != "csv" {
+		slog.Info("Performing initial health check...")
+	}
 	if err := memMonitor.HealthCheck(ctx); err != nil {
-		slog.Error("Health check failed", "error", err)
+		if cfg.Output != "csv" {
+			slog.Error("Health check failed", "error", err)
+		}
 		cancel()
 		return
 	}
@@ -117,16 +128,22 @@ func main() {
 
 	go func() {
 		<-sigChan
-		slog.Info("Received shutdown signal, gracefully shutting down...")
+		if cfg.Output != "csv" {
+			slog.Info("Received shutdown signal, gracefully shutting down...")
+		}
 		cancel()
 	}()
 
 	// Main application loop
-	slog.Info("Starting monitoring loop...")
+	if cfg.Output != "csv" {
+		slog.Info("Starting monitoring loop...")
+	}
 
 	// Run initial collection and analysis
 	if err := runMemoryCheck(ctx, memMonitor, cfg); err != nil {
-		slog.Error("Initial memory check failed", "error", err)
+		if cfg.Output != "csv" {
+			slog.Error("Initial memory check failed", "error", err)
+		}
 	}
 
 	ticker := time.NewTicker(cfg.CheckInterval)
@@ -135,11 +152,15 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("Application shutdown complete")
+			if cfg.Output != "csv" {
+				slog.Info("Application shutdown complete")
+			}
 			return
 		case <-ticker.C:
 			if err := runMemoryCheck(ctx, memMonitor, cfg); err != nil {
-				slog.Error("Memory check cycle failed", "error", err)
+				if cfg.Output != "csv" {
+					slog.Error("Memory check cycle failed", "error", err)
+				}
 			}
 		}
 	}
@@ -147,7 +168,9 @@ func main() {
 
 // runMemoryCheck executes a single cycle of memory monitoring and analysis
 func runMemoryCheck(ctx context.Context, memMonitor *monitor.MemoryMonitor, cfg *config.Config) error {
-	slog.Info("Starting memory check cycle...", "timestamp", time.Now().Format(time.RFC3339))
+	if cfg.Output != "csv" {
+		slog.Info("Starting memory check cycle...", "timestamp", time.Now().Format(time.RFC3339))
+	}
 
 	// Perform memory analysis
 	analysis, err := memMonitor.AnalyzeMemoryUsage(ctx)
@@ -155,21 +178,29 @@ func runMemoryCheck(ctx context.Context, memMonitor *monitor.MemoryMonitor, cfg 
 		return err
 	}
 
-	// Print the complete detailed report showing all pods
-	analysis.Report.PrintDetailedReport(cfg)
+	// Print output according to format
+	if cfg.Output == "csv" {
+		// Show header only on first run
+		analysis.Report.PrintCSV(cfg, !csvHeaderPrinted)
+		csvHeaderPrinted = true
+	} else {
+		// Print the complete detailed report showing all pods
+		analysis.Report.PrintDetailedReport(cfg)
+		// Always print analysis (warnings, recommendations)
+		analysis.PrintAnalysis(cfg)
+	}
 
-	// Always print analysis (warnings, recommendations)
-	analysis.PrintAnalysis(cfg)
-
-	// Log summary information structured
-	slog.Info("Memory check completed",
-		"total_pods", analysis.Report.Summary.TotalPods,
-		"running_pods", analysis.Report.Summary.RunningPods,
-		"problems_found", len(analysis.ProblemsFound),
-		"high_usage_pods", len(analysis.HighUsagePods),
-		"warning_pods", len(analysis.WarningPods),
-		"total_memory_usage", analysis.Report.Summary.TotalMemoryUsage.String(),
-	)
+	// Log summary information structured (only in table mode)
+	if cfg.Output != "csv" {
+		slog.Info("Memory check completed",
+			"total_pods", analysis.Report.Summary.TotalPods,
+			"running_pods", analysis.Report.Summary.RunningPods,
+			"problems_found", len(analysis.ProblemsFound),
+			"high_usage_pods", len(analysis.HighUsagePods),
+			"warning_pods", len(analysis.WarningPods),
+			"total_memory_usage", analysis.Report.Summary.TotalMemoryUsage.String(),
+		)
+	}
 
 	return nil
 }

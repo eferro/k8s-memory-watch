@@ -32,22 +32,28 @@ func New(cfg *config.Config) (*MemoryMonitor, error) {
 
 // HealthCheck verifies the monitor can connect to Kubernetes
 func (m *MemoryMonitor) HealthCheck(ctx context.Context) error {
-	slog.Info("Performing health check...")
+	if m.config.Output != "csv" {
+		slog.Info("Performing health check...")
+	}
 
 	err := m.k8sClient.HealthCheck(ctx)
 	if err != nil {
 		return fmt.Errorf("kubernetes health check failed: %w", err)
 	}
 
-	slog.Info("Health check passed - Kubernetes cluster is accessible")
+	if m.config.Output != "csv" {
+		slog.Info("Health check passed - Kubernetes cluster is accessible")
+	}
 	return nil
 }
 
 // CollectMemoryInfo collects memory information from pods based on configuration
 func (m *MemoryMonitor) CollectMemoryInfo(ctx context.Context) (*MemoryReport, error) {
-	slog.Info("Starting memory information collection...",
-		"target_namespace", m.config.Namespace,
-		"all_namespaces", m.config.AllNamespaces)
+	if m.config.Output != "csv" {
+		slog.Info("Starting memory information collection...",
+			"target_namespace", m.config.Namespace,
+			"all_namespaces", m.config.AllNamespaces)
+	}
 
 	var pods []k8s.PodMemoryInfo
 	var summary *k8s.MemorySummary
@@ -82,11 +88,13 @@ func (m *MemoryMonitor) CollectMemoryInfo(ctx context.Context) (*MemoryReport, e
 		Pods:    pods,
 	}
 
-	slog.Info("Memory collection completed successfully",
-		"total_pods", summary.TotalPods,
-		"running_pods", summary.RunningPods,
-		"namespaces", summary.NamespaceCount,
-		"target_namespace", m.config.Namespace)
+	if m.config.Output != "csv" {
+		slog.Info("Memory collection completed successfully",
+			"total_pods", summary.TotalPods,
+			"running_pods", summary.RunningPods,
+			"namespaces", summary.NamespaceCount,
+			"target_namespace", m.config.Namespace)
+	}
 
 	return report, nil
 }
@@ -150,10 +158,12 @@ func (m *MemoryMonitor) AnalyzeMemoryUsage(ctx context.Context) (*AnalysisResult
 		}
 	}
 
-	slog.Info("Memory analysis completed",
-		"warning_pods", len(analysis.WarningPods),
-		"high_usage_pods", len(analysis.HighUsagePods),
-		"problems_found", len(analysis.ProblemsFound))
+	if m.config.Output != "csv" {
+		slog.Info("Memory analysis completed",
+			"warning_pods", len(analysis.WarningPods),
+			"high_usage_pods", len(analysis.HighUsagePods),
+			"problems_found", len(analysis.ProblemsFound))
+	}
 
 	return analysis, nil
 }

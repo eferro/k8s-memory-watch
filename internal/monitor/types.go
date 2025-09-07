@@ -1,13 +1,17 @@
 package monitor
 
 import (
+	"encoding/csv"
 	"fmt"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/eduardoferro/k8s-memory-watch/internal/config"
 	"github.com/eduardoferro/k8s-memory-watch/internal/k8s"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // MemoryReport contains the complete memory report for the cluster
@@ -69,6 +73,97 @@ func (r *MemoryReport) PrintDetailedReport(cfg *config.Config) {
 		fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 	}
 	fmt.Printf("\n")
+}
+
+// PrintCSV prints pod memory information in CSV format
+func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
+	writer := csv.NewWriter(os.Stdout)
+	defer writer.Flush()
+
+	// Write header only if requested (first time)
+	if showHeader {
+		// Create dynamic header based on requested labels and annotations
+		header := []string{
+			"timestamp",
+			"namespace",
+			"pod_name",
+			"phase",
+			"ready",
+			"usage_bytes",
+			"request_bytes",
+			"limit_bytes",
+			"usage_percent",
+			"limit_usage_percent",
+		}
+
+		// Add label columns
+		for _, label := range cfg.Labels {
+			header = append(header, "label_"+strings.ReplaceAll(label, ".", "_"))
+		}
+
+		// Add annotation columns
+		for _, annotation := range cfg.Annotations {
+			header = append(header, "annotation_"+strings.ReplaceAll(annotation, ".", "_"))
+		}
+
+		// Write header
+		writer.Write(header)
+	}
+
+	// Write pod data
+	for _, pod := range r.Pods {
+		pod.CalculateUsagePercent()
+
+		record := []string{
+			r.Summary.Timestamp.Format(time.RFC3339),
+			pod.Namespace,
+			pod.PodName,
+			pod.Phase,
+			strconv.FormatBool(pod.Ready),
+			formatBytesForCSV(pod.CurrentUsage),
+			formatBytesForCSV(pod.MemoryRequest),
+			formatBytesForCSV(pod.MemoryLimit),
+			formatPercentForCSV(pod.UsagePercent),
+			formatPercentForCSV(pod.LimitUsagePercent),
+		}
+
+		// Add label values
+		for _, label := range cfg.Labels {
+			if value, exists := pod.Labels[label]; exists {
+				record = append(record, value)
+			} else {
+				record = append(record, "")
+			}
+		}
+
+		// Add annotation values
+		for _, annotation := range cfg.Annotations {
+			if value, exists := pod.Annotations[annotation]; exists {
+				// Clean annotation values for CSV (remove newlines and quotes)
+				cleanValue := strings.ReplaceAll(strings.ReplaceAll(value, "\n", " "), "\r", " ")
+				record = append(record, cleanValue)
+			} else {
+				record = append(record, "")
+			}
+		}
+
+		writer.Write(record)
+	}
+}
+
+// Helper functions for CSV formatting
+func formatBytesForCSV(q *resource.Quantity) string {
+	if q == nil {
+		return ""
+	}
+	return strconv.FormatInt(q.Value(), 10)
+}
+
+func formatPercentForCSV(percent *float64) string {
+	if percent == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*percent, 'f', 2, 64)
 }
 
 // PrintAnalysis prints the analysis results with warnings and recommendations

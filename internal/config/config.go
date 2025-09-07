@@ -28,6 +28,7 @@ type Config struct {
 	// Display configuration
 	Labels      []string // Labels to display for each pod
 	Annotations []string // Annotations to display for each pod
+	Output      string   // Output format (table, csv)
 }
 
 // CLIConfig holds command line argument values
@@ -42,6 +43,7 @@ type CLIConfig struct {
 	LogLevel             string
 	Labels               string // Comma-separated list of labels to display
 	Annotations          string // Comma-separated list of annotations to display
+	Output               string // Output format (table, csv)
 }
 
 // Load loads configuration from environment variables with sensible defaults
@@ -65,6 +67,7 @@ func LoadWithCLI(cli *CLIConfig) (*Config, error) {
 		LogFormat:            getEnv("LOG_FORMAT", "json"),
 		Labels:               parseCommaSeparated(getEnv("LABELS", "")),
 		Annotations:          parseCommaSeparated(getEnv("ANNOTATIONS", "")),
+		Output:               getEnv("OUTPUT", "table"),
 	}
 
 	// Apply CLI flags (they override environment variables)
@@ -99,6 +102,9 @@ func LoadWithCLI(cli *CLIConfig) (*Config, error) {
 		if cli.Annotations != "" {
 			cfg.Annotations = parseCommaSeparated(cli.Annotations)
 		}
+		if cli.Output != "" {
+			cfg.Output = cli.Output
+		}
 	}
 
 	// Apply default behavior for namespace selection
@@ -128,6 +134,10 @@ func (c *Config) validate() error {
 
 	if c.MemoryWarningPercent <= 0 || c.MemoryWarningPercent > 100 {
 		return fmt.Errorf("memory_warning_percent must be between 0 and 100")
+	}
+
+	if c.Output != "table" && c.Output != "csv" {
+		return fmt.Errorf("output must be either 'table' or 'csv'")
 	}
 
 	return nil
