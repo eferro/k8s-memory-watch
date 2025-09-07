@@ -39,6 +39,7 @@ Namespace: monitoring
   🟢 prometheus-server-456def789 | Usage: 180.4 MB | Request: 200.0 MB (90.2%) | Limit: 400.0 MB (45.1%)
   🟢 grafana-789ghi012 | Usage: 65.7 MB | Request: 100.0 MB (65.7%) | Limit: 200.0 MB (32.9%)
   🟡 alertmanager-pending | Usage: N/A | Request: 50.0 MB (N/A) | Limit: 100.0 MB (N/A)
+  ⚪ fluent-bit-starting | Usage: N/A | Request: 128.0 MB (N/A) | Limit: 256.0 MB (N/A)
 
 Namespace: production
 --------------------------------------------------------------------------------
@@ -76,6 +77,7 @@ SYMBOL EXPLANATION:
 🟢 = Pod Running and Ready
 🔴 = Pod with issues (high memory usage or not Ready)  
 🟡 = Pod Pending
+⚪ = No memory metrics available (pod starting up or metrics not ready)
 
 POD FORMAT:
 ===========

@@ -157,4 +157,13 @@ Both work, but CLI flags take precedence and provide better UX.
 ./build/mgmt-monitoring --in-cluster --namespace=monitoring --check-interval=30s
 ```
 
+## 📊 **Output Symbols**
+
+The tool uses visual indicators to show pod status at a glance:
+
+- 🟢 Pod Running and Ready
+- 🔴 Pod with issues (high memory usage or not Ready)
+- 🟡 Pod Pending 
+- ⚪ No memory metrics available (pod starting up or metrics not ready)
+
 This provides a **professional CLI experience** matching Kubernetes tooling standards! 🎯
