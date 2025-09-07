@@ -1,4 +1,4 @@
-🚀 Ejemplo de Salida - Kubernetes Memory Monitoring
+🚀 Sample Output - Kubernetes Memory Monitoring
 ====================================================
 
 === Kubernetes Memory Report ===
@@ -70,20 +70,20 @@ Namespace: production
 • Monitor 3 high-usage pods closely - consider scaling or optimization
 • Regular monitoring recommended with current threshold: 80.0%
 
-EXPLICACIÓN DE LOS SÍMBOLOS:
-============================
+SYMBOL EXPLANATION:
+==================
 
-🟢 = Pod Running y Ready
-🔴 = Pod con problemas (alto uso memoria o no Ready)  
+🟢 = Pod Running and Ready
+🔴 = Pod with issues (high memory usage or not Ready)  
 🟡 = Pod Pending
 
-FORMATO DE CADA POD:
-==================
-[Estado] namespace/pod-name | Usage: [memoria actual] | Request: [solicitada] ([% uso vs request]) | Limit: [límite] ([% uso vs limit])
+POD FORMAT:
+===========
+[Status] namespace/pod-name | Usage: [current memory] | Request: [requested] ([% usage vs request]) | Limit: [limit] ([% usage vs limit])
 
-DATOS MOSTRADOS:
-===============
-- Usage: Memoria RAM actualmente utilizada por el pod
-- Request: Memoria que el pod solicitó al cluster (% = uso actual / request * 100)
-- Limit: Límite máximo de memoria permitido (% = uso actual / limit * 100)
-- N/A: No definido (sin request o limit configurado)
+DATA SHOWN:
+===========
+- Usage: RAM currently used by the pod
+- Request: Memory the pod requested from the cluster (% = current usage / request * 100)
+- Limit: Maximum memory limit allowed (% = current usage / limit * 100)
+- N/A: Not defined (no request or limit configured)
