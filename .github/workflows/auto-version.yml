@@ -40,7 +40,16 @@ jobs:
           BUMP_TYPE="${{ github.event.inputs.version_type }}"
         else
           # Analyze commit messages to determine bump type
-          COMMITS=$(git log ${{ steps.get_latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"%s")
+          LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          
+          # Handle case when no tags exist yet
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            # For first release, get all commits from beginning
+            COMMITS=$(git log --pretty=format:"%s")
+          else
+            # Get commits since last tag
+            COMMITS=$(git log $LATEST_TAG..HEAD --pretty=format:"%s")
+          fi
           
           if echo "$COMMITS" | grep -qE "^(feat|feature)(\(.+\))?!:|BREAKING CHANGE:|^[a-z]+(\(.+\))?!:"; then
             BUMP_TYPE="major"

@@ -104,7 +104,7 @@ func main() {
 	}
 
 	// Set up structured logging (suppressed in CSV mode)
-	if cfg.Output != "csv" {
+	if cfg.Output != config.OutputFormatCSV {
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
 		}))
@@ -127,11 +127,11 @@ func main() {
 	defer cancel()
 
 	// Perform initial health check
-	if cfg.Output != "csv" {
+	if cfg.Output != config.OutputFormatCSV {
 		slog.Info("Performing initial health check...")
 	}
 	if err := memMonitor.HealthCheck(ctx); err != nil {
-		if cfg.Output != "csv" {
+		if cfg.Output != config.OutputFormatCSV {
 			slog.Error("Health check failed", "error", err)
 		}
 		cancel()
@@ -144,20 +144,20 @@ func main() {
 
 	go func() {
 		<-sigChan
-		if cfg.Output != "csv" {
+		if cfg.Output != config.OutputFormatCSV {
 			slog.Info("Received shutdown signal, gracefully shutting down...")
 		}
 		cancel()
 	}()
 
 	// Main application loop
-	if cfg.Output != "csv" {
+	if cfg.Output != config.OutputFormatCSV {
 		slog.Info("Starting monitoring loop...")
 	}
 
 	// Run initial collection and analysis
 	if err := runMemoryCheck(ctx, memMonitor, cfg); err != nil {
-		if cfg.Output != "csv" {
+		if cfg.Output != config.OutputFormatCSV {
 			slog.Error("Initial memory check failed", "error", err)
 		}
 	}
@@ -168,13 +168,13 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
-			if cfg.Output != "csv" {
+			if cfg.Output != config.OutputFormatCSV {
 				slog.Info("Application shutdown complete")
 			}
 			return
 		case <-ticker.C:
 			if err := runMemoryCheck(ctx, memMonitor, cfg); err != nil {
-				if cfg.Output != "csv" {
+				if cfg.Output != config.OutputFormatCSV {
 					slog.Error("Memory check cycle failed", "error", err)
 				}
 			}
@@ -184,7 +184,7 @@ func main() {
 
 // runMemoryCheck executes a single cycle of memory monitoring and analysis
 func runMemoryCheck(ctx context.Context, memMonitor *monitor.MemoryMonitor, cfg *config.Config) error {
-	if cfg.Output != "csv" {
+	if cfg.Output != config.OutputFormatCSV {
 		slog.Info("Starting memory check cycle...", "timestamp", time.Now().Format(time.RFC3339))
 	}
 
@@ -195,7 +195,7 @@ func runMemoryCheck(ctx context.Context, memMonitor *monitor.MemoryMonitor, cfg 
 	}
 
 	// Print output according to format
-	if cfg.Output == "csv" {
+	if cfg.Output == config.OutputFormatCSV {
 		// Show header only on first run
 		analysis.Report.PrintCSV(cfg, !csvHeaderPrinted)
 		csvHeaderPrinted = true
@@ -207,7 +207,7 @@ func runMemoryCheck(ctx context.Context, memMonitor *monitor.MemoryMonitor, cfg 
 	}
 
 	// Log summary information structured (only in table mode)
-	if cfg.Output != "csv" {
+	if cfg.Output != config.OutputFormatCSV {
 		slog.Info("Memory check completed",
 			"total_pods", analysis.Report.Summary.TotalPods,
 			"running_pods", analysis.Report.Summary.RunningPods,

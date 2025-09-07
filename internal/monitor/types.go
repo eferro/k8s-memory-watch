@@ -63,7 +63,8 @@ func (r *MemoryReport) PrintDetailedReport(cfg *config.Config) {
 	fmt.Printf("=== Detailed Pod Memory Information ===\n")
 
 	currentNamespace := ""
-	for _, pod := range r.Pods {
+	for i := range r.Pods {
+		pod := &r.Pods[i]
 		if pod.Namespace != currentNamespace {
 			currentNamespace = pod.Namespace
 			fmt.Printf("\nNamespace: %s\n", currentNamespace)
@@ -108,11 +109,15 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 		}
 
 		// Write header
-		writer.Write(header)
+		if err := writer.Write(header); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing CSV header: %v\n", err)
+			return
+		}
 	}
 
 	// Write pod data
-	for _, pod := range r.Pods {
+	for i := range r.Pods {
+		pod := &r.Pods[i]
 		pod.CalculateUsagePercent()
 
 		record := []string{
@@ -149,7 +154,10 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 			}
 		}
 
-		writer.Write(record)
+		if err := writer.Write(record); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing CSV record: %v\n", err)
+			continue
+		}
 	}
 }
 
@@ -169,7 +177,7 @@ func formatPercentForCSV(percent *float64) string {
 }
 
 // getMemoryStatus determines the memory status of a pod for CSV output
-func getMemoryStatus(pod k8s.PodMemoryInfo, cfg *config.Config) string {
+func getMemoryStatus(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 	// No metrics available
 	if pod.CurrentUsage == nil {
 		return "no_data"
@@ -228,14 +236,16 @@ func (a *AnalysisResult) PrintAnalysis(cfg *config.Config) {
 
 	if len(a.HighUsagePods) > 0 {
 		fmt.Printf("\n🔥 High Memory Usage Pods (%d):\n", len(a.HighUsagePods))
-		for _, pod := range a.HighUsagePods {
+		for i := range a.HighUsagePods {
+			pod := &a.HighUsagePods[i]
 			fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 		}
 	}
 
 	if len(a.WarningPods) > 0 {
 		fmt.Printf("\n⚠️  Warning Level Pods (%d):\n", len(a.WarningPods))
-		for _, pod := range a.WarningPods {
+		for i := range a.WarningPods {
+			pod := &a.WarningPods[i]
 			if !contains(a.HighUsagePods, pod) {
 				fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 			}
@@ -247,7 +257,7 @@ func (a *AnalysisResult) PrintAnalysis(cfg *config.Config) {
 }
 
 // formatPodInfo formats a single pod's memory information
-func formatPodInfo(pod k8s.PodMemoryInfo, cfg *config.Config) string {
+func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 	pod.CalculateUsagePercent()
 
 	// Format pod state info for diagnostics
@@ -312,7 +322,8 @@ func printRecommendations(a *AnalysisResult) {
 	podsWithoutLimits := 0
 	podsWithoutRequests := 0
 
-	for _, pod := range a.Report.Pods {
+	for i := range a.Report.Pods {
+		pod := &a.Report.Pods[i]
 		if pod.MemoryLimit == nil {
 			podsWithoutLimits++
 		}
@@ -341,7 +352,7 @@ func printRecommendations(a *AnalysisResult) {
 }
 
 // formatPodMetadata formats labels and annotations for display based on configuration
-func formatPodMetadata(pod k8s.PodMemoryInfo, cfg *config.Config) string {
+func formatPodMetadata(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 	// Only show metadata if specifically requested
 	if len(cfg.Labels) == 0 && len(cfg.Annotations) == 0 {
 		return ""
@@ -412,8 +423,9 @@ func formatRequestedAnnotations(podAnnotations map[string]string, requestedAnnot
 
 // Helper functions
 
-func contains(pods []k8s.PodMemoryInfo, target k8s.PodMemoryInfo) bool {
-	for _, pod := range pods {
+func contains(pods []k8s.PodMemoryInfo, target *k8s.PodMemoryInfo) bool {
+	for i := range pods {
+		pod := &pods[i]
 		if pod.Namespace == target.Namespace && pod.PodName == target.PodName {
 			return true
 		}

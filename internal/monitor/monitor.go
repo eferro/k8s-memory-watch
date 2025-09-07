@@ -32,7 +32,7 @@ func New(cfg *config.Config) (*MemoryMonitor, error) {
 
 // HealthCheck verifies the monitor can connect to Kubernetes
 func (m *MemoryMonitor) HealthCheck(ctx context.Context) error {
-	if m.config.Output != "csv" {
+	if m.config.Output != config.OutputFormatCSV {
 		slog.Info("Performing health check...")
 	}
 
@@ -41,7 +41,7 @@ func (m *MemoryMonitor) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("kubernetes health check failed: %w", err)
 	}
 
-	if m.config.Output != "csv" {
+	if m.config.Output != config.OutputFormatCSV {
 		slog.Info("Health check passed - Kubernetes cluster is accessible")
 	}
 	return nil
@@ -49,7 +49,7 @@ func (m *MemoryMonitor) HealthCheck(ctx context.Context) error {
 
 // CollectMemoryInfo collects memory information from pods based on configuration
 func (m *MemoryMonitor) CollectMemoryInfo(ctx context.Context) (*MemoryReport, error) {
-	if m.config.Output != "csv" {
+	if m.config.Output != config.OutputFormatCSV {
 		slog.Info("Starting memory information collection...",
 			"target_namespace", m.config.Namespace,
 			"all_namespaces", m.config.AllNamespaces)
@@ -88,7 +88,7 @@ func (m *MemoryMonitor) CollectMemoryInfo(ctx context.Context) (*MemoryReport, e
 		Pods:    pods,
 	}
 
-	if m.config.Output != "csv" {
+	if m.config.Output != config.OutputFormatCSV {
 		slog.Info("Memory collection completed successfully",
 			"total_pods", summary.TotalPods,
 			"running_pods", summary.RunningPods,
@@ -114,7 +114,8 @@ func (m *MemoryMonitor) AnalyzeMemoryUsage(ctx context.Context) (*AnalysisResult
 	}
 
 	// Analyze each pod
-	for _, pod := range report.Pods {
+	for i := range report.Pods {
+		pod := &report.Pods[i]
 		// Skip pods without current usage data
 		if pod.CurrentUsage == nil {
 			continue
@@ -125,10 +126,10 @@ func (m *MemoryMonitor) AnalyzeMemoryUsage(ctx context.Context) (*AnalysisResult
 
 		// Check for high usage against requests
 		if pod.UsagePercent != nil && *pod.UsagePercent >= m.config.MemoryWarningPercent {
-			analysis.WarningPods = append(analysis.WarningPods, pod)
+			analysis.WarningPods = append(analysis.WarningPods, *pod)
 
 			if *pod.UsagePercent >= 95.0 {
-				analysis.HighUsagePods = append(analysis.HighUsagePods, pod)
+				analysis.HighUsagePods = append(analysis.HighUsagePods, *pod)
 				analysis.ProblemsFound = append(analysis.ProblemsFound,
 					fmt.Sprintf("Pod %s/%s is using %.1f%% of its memory request",
 						pod.Namespace, pod.PodName, *pod.UsagePercent))
@@ -137,7 +138,7 @@ func (m *MemoryMonitor) AnalyzeMemoryUsage(ctx context.Context) (*AnalysisResult
 
 		// Check for high usage against limits
 		if pod.LimitUsagePercent != nil && *pod.LimitUsagePercent >= 90.0 {
-			analysis.HighUsagePods = append(analysis.HighUsagePods, pod)
+			analysis.HighUsagePods = append(analysis.HighUsagePods, *pod)
 			analysis.ProblemsFound = append(analysis.ProblemsFound,
 				fmt.Sprintf("Pod %s/%s is using %.1f%% of its memory limit",
 					pod.Namespace, pod.PodName, *pod.LimitUsagePercent))
@@ -158,7 +159,7 @@ func (m *MemoryMonitor) AnalyzeMemoryUsage(ctx context.Context) (*AnalysisResult
 		}
 	}
 
-	if m.config.Output != "csv" {
+	if m.config.Output != config.OutputFormatCSV {
 		slog.Info("Memory analysis completed",
 			"warning_pods", len(analysis.WarningPods),
 			"high_usage_pods", len(analysis.HighUsagePods),

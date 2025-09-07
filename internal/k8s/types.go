@@ -56,15 +56,22 @@ func FormatMemory(q *resource.Quantity) string {
 	value := q.Value()
 
 	// Convert to appropriate unit
-	if value >= 1024*1024*1024 { // GB
-		return fmt.Sprintf("%.2f GB", float64(value)/(1024*1024*1024))
-	} else if value >= 1024*1024 { // MB
-		return fmt.Sprintf("%.1f MB", float64(value)/(1024*1024))
-	} else if value >= 1024 { // KB
-		return fmt.Sprintf("%.1f KB", float64(value)/1024)
-	}
+	const (
+		gb = 1024 * 1024 * 1024
+		mb = 1024 * 1024
+		kb = 1024
+	)
 
-	return fmt.Sprintf("%d B", value)
+	switch {
+	case value >= gb:
+		return fmt.Sprintf("%.2f GB", float64(value)/gb)
+	case value >= mb:
+		return fmt.Sprintf("%.1f MB", float64(value)/mb)
+	case value >= kb:
+		return fmt.Sprintf("%.1f KB", float64(value)/kb)
+	default:
+		return fmt.Sprintf("%d B", value)
+	}
 }
 
 // FormatPercent formats a percentage value

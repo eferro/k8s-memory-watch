@@ -102,7 +102,7 @@ func TestFormatPodInfo(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := formatPodInfo(tc.pod, cfg)
+			result := formatPodInfo(&tc.pod, cfg)
 
 			// Check if the expected symbol is present
 			if !strings.Contains(result, tc.expectedSymbol) {
@@ -153,7 +153,7 @@ func TestFormatPodInfo_NoMetricsOverridesStatus(t *testing.T) {
 				CurrentUsage: nil, // No metrics - this should override status
 			}
 
-			result := formatPodInfo(pod, cfg)
+			result := formatPodInfo(&pod, cfg)
 
 			if !strings.Contains(result, tc.shouldShow) {
 				t.Errorf("Expected grey symbol ⚪ for phase=%s ready=%t, but got: %s",
@@ -239,7 +239,7 @@ func TestGetMemoryStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Calculate usage percentages
 			tt.pod.CalculateUsagePercent()
-			result := getMemoryStatus(tt.pod, cfg)
+			result := getMemoryStatus(&tt.pod, cfg)
 			if result != tt.expected {
 				t.Errorf("getMemoryStatus() = %v, want %v", result, tt.expected)
 			}
