@@ -36,6 +36,39 @@ make build
 make up
 ```
 
+## Installation
+
+You can install from prebuilt binaries or build from source.
+
+### Install from Releases (recommended)
+
+1. Go to the Releases page:
+   - `https://github.com/eferro/k8s-memory-watch/releases`
+2. Download the binary for your platform:
+   - `k8s-memory-watch-linux-amd64` or `k8s-memory-watch-linux-arm64`
+   - `k8s-memory-watch-darwin-amd64` or `k8s-memory-watch-darwin-arm64`
+   - `k8s-memory-watch-windows-amd64.exe`
+3. Verify checksums with `SHA256SUMS` (optional but recommended)
+4. Make it executable and move to PATH (Linux/macOS):
+
+```bash
+chmod +x k8s-memory-watch
+sudo mv k8s-memory-watch /usr/local/bin/
+```
+
+### Install via script
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eferro/k8s-memory-watch/main/install.sh | bash
+```
+
+## Releases
+
+- Releases are created automatically from tags (semantic versioning) by GitHub Actions.
+- Version bump follows Conventional Commits.
+- Multi-platform artifacts are published alongside `SHA256SUMS`.
+- Releases page: `https://github.com/eferro/k8s-memory-watch/releases`
+
 ### Development
 
 ```bash

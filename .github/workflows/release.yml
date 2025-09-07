@@ -1,15 +1,22 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Auto Version"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v0.1.0). If empty, use latest tag"
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
 jobs:
   create-release:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
@@ -22,7 +29,13 @@ jobs:
     - name: Get version from tag
       id: get_version
       run: |
-        TAG_NAME=${GITHUB_REF#refs/tags/}
+        set -euo pipefail
+        if [ -n "${{ github.event.inputs.tag || '' }}" ]; then
+          TAG_NAME="${{ github.event.inputs.tag }}"
+        else
+          git fetch --tags --force
+          TAG_NAME=$(git describe --tags --abbrev=0)
+        fi
         echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
         echo "version=${TAG_NAME#v}" >> $GITHUB_OUTPUT
 
@@ -50,7 +63,7 @@ jobs:
         ### Linux/macOS
         \`\`\`bash
         # Download binary
-        curl -L -o k8s-memory-watch https://github.com/eduardoferro/k8s-memory-watch/releases/download/${{ steps.get_version.outputs.tag_name }}/k8s-memory-watch-linux-amd64
+        curl -L -o k8s-memory-watch https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.tag_name }}/k8s-memory-watch-linux-amd64
         chmod +x k8s-memory-watch
         sudo mv k8s-memory-watch /usr/local/bin/
         \`\`\`
@@ -72,6 +85,7 @@ jobs:
         prerelease: false
 
   build-and-upload:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     needs: create-release
     strategy:
@@ -126,6 +140,7 @@ jobs:
         asset_content_type: application/octet-stream
 
   create-checksums:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     needs: [create-release, build-and-upload]
     steps:
@@ -137,9 +152,9 @@ jobs:
         mkdir -p release-assets
         
         # Download all release assets
-        RELEASE_ID=$(curl -s "https://api.github.com/repos/eduardoferro/k8s-memory-watch/releases/tags/${{ needs.create-release.outputs.tag_name }}" | jq -r '.id')
+        RELEASE_ID=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ needs.create-release.outputs.tag_name }}" | jq -r '.id')
         
-        curl -s "https://api.github.com/repos/eduardoferro/k8s-memory-watch/releases/${RELEASE_ID}/assets" \
+        curl -s "https://api.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets" \
           | jq -r '.[] | select(.name | test("^k8s-memory-watch-")) | .browser_download_url' \
           | while read url; do
               wget -P release-assets "$url"
