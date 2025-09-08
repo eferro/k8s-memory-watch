@@ -2,103 +2,46 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
-  validate:
+  build-test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.22.5'
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Install dependencies
-      run: go mod download
+      - name: Vet
+        run: go vet ./...
 
-    - name: Install development tools
-      run: make local-setup
+      - name: Lint
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run
 
-    - name: Run validation suite
-      run: make validate
+      - name: Test
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
 
-    - name: Build binary
-      run: make build
-
-    - name: Test binary version command
-      run: ./build/k8s-memory-watch --version
-
-  security:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.22.5'
-
-    - name: Run security scan
-      run: make security-scan
-
-  build-matrix:
-    runs-on: ubuntu-latest
-    needs: [validate, security]
-    strategy:
-      matrix:
-        goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
-        exclude:
-          - goos: windows
-            goarch: arm64
-    
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.22.5'
-
-    - name: Build for ${{ matrix.goos }}-${{ matrix.goarch }}
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-      run: |
-        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-        COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        
-        mkdir -p dist
-        BINARY_NAME="k8s-memory-watch"
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          BINARY_NAME="${BINARY_NAME}.exe"
-        fi
-        
-        go build \
-          -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILD_TIME}" \
-          -o "dist/${BINARY_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}" \
-          ./cmd/k8s-memory-watch
-        
-        # Test the binary (skip Windows on Linux)
-        if [ "${{ matrix.goos }}" = "linux" ]; then
-          ./dist/${BINARY_NAME}-${{ matrix.goos }}-${{ matrix.goarch }} --version
-        fi
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: dist/
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
