@@ -186,6 +186,26 @@ func (c *Client) getNamespacePodsMemoryInfo(ctx context.Context, namespace strin
 	return podInfos, summary, nil
 }
 
+func (c *Client) processContainerMemoryInfo(container *corev1.Container, usage corev1.ResourceList) (ContainerMemoryInfo, int64, int64, bool, bool) {
+	info := ContainerMemoryInfo{ContainerName: container.Name}
+	var req, lim int64
+	if r, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
+		req = r.Value()
+		v := r
+		info.MemoryRequest = &v
+	}
+	if l, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
+		lim = l.Value()
+		v := l
+		info.MemoryLimit = &v
+	}
+	if u, ok := usage[corev1.ResourceMemory]; ok {
+		v := u
+		info.CurrentUsage = &v
+	}
+	return info, req, lim, info.MemoryRequest != nil, info.MemoryLimit != nil
+}
+
 // processPodMemoryInfo creates PodMemoryInfo from pod spec and metrics
 func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.PodMetrics) PodMemoryInfo {
 	podInfo := PodMemoryInfo{
@@ -218,43 +238,15 @@ func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.P
 		}
 	}
 
-	// Initialize container slice
 	podInfo.Containers = make([]ContainerMemoryInfo, 0, len(pod.Spec.Containers))
-
 	for i := range pod.Spec.Containers {
 		container := &pod.Spec.Containers[i]
-		cm := ContainerMemoryInfo{ContainerName: container.Name}
-		if container.Resources.Requests != nil {
-			if memReq, exists := container.Resources.Requests[corev1.ResourceMemory]; exists {
-				totalRequest += memReq.Value()
-				v := memReq
-				cm.MemoryRequest = &v
-			} else {
-				hasRequest = false
-			}
-		} else {
-			hasRequest = false
-		}
-
-		if container.Resources.Limits != nil {
-			if memLimit, exists := container.Resources.Limits[corev1.ResourceMemory]; exists {
-				totalLimit += memLimit.Value()
-				v := memLimit
-				cm.MemoryLimit = &v
-			} else {
-				hasLimit = false
-			}
-		} else {
-			hasLimit = false
-		}
-
-		if usage, ok := metricsByName[container.Name]; ok {
-			if memUsage, exists := usage[corev1.ResourceMemory]; exists {
-				v := memUsage
-				cm.CurrentUsage = &v
-			}
-		}
-
+		usage := metricsByName[container.Name]
+		cm, req, lim, hasReq, hasLim := c.processContainerMemoryInfo(container, usage)
+		totalRequest += req
+		totalLimit += lim
+		hasRequest = hasRequest && hasReq
+		hasLimit = hasLimit && hasLim
 		podInfo.Containers = append(podInfo.Containers, cm)
 	}
 

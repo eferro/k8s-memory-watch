@@ -83,3 +83,27 @@ func TestProcessPodMemoryInfo_PopulatesContainers(t *testing.T) {
 		t.Fatalf("sidecar should not have requests/limits set")
 	}
 }
+
+func TestProcessContainerMemoryInfo_PopulatesFields(t *testing.T) {
+	container := &corev1.Container{
+		Name: "app",
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("100Mi")},
+			Limits:   corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("200Mi")},
+		},
+	}
+	usage := corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("150Mi")}
+
+	c := &Client{}
+	info, req, lim, hasReq, hasLim := c.processContainerMemoryInfo(container, usage)
+
+	if info.ContainerName != "app" || !hasReq || !hasLim {
+		t.Fatalf("missing data")
+	}
+	if req != int64(100*1024*1024) || lim != int64(200*1024*1024) {
+		t.Fatalf("wrong totals")
+	}
+	if info.CurrentUsage == nil || info.CurrentUsage.Value() == 0 {
+		t.Fatalf("usage not set")
+	}
+}
