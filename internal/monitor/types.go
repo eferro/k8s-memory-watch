@@ -125,41 +125,7 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 		if len(pod.Containers) > 0 {
 			for _, c := range pod.Containers {
 				c.CalculateUsagePercent()
-				record := []string{
-					r.Summary.Timestamp.Format(time.RFC3339),
-					getMemoryStatus(pod, cfg),
-					pod.Namespace,
-					pod.PodName,
-					pod.Phase,
-					strconv.FormatBool(pod.Ready),
-					formatBytesForCSV(c.CurrentUsage),
-					formatBytesForCSV(c.MemoryRequest),
-					formatBytesForCSV(c.MemoryLimit),
-					formatPercentForCSV(c.UsagePercent),
-					formatPercentForCSV(c.LimitUsagePercent),
-					c.ContainerName,
-				}
-
-				// Add label values
-				for _, label := range cfg.Labels {
-					if value, exists := pod.Labels[label]; exists {
-						record = append(record, value)
-					} else {
-						record = append(record, "")
-					}
-				}
-
-				// Add annotation values
-				for _, annotation := range cfg.Annotations {
-					if value, exists := pod.Annotations[annotation]; exists {
-						// Clean annotation values for CSV (remove newlines and quotes)
-						cleanValue := strings.ReplaceAll(strings.ReplaceAll(value, "\n", " "), "\r", " ")
-						record = append(record, cleanValue)
-					} else {
-						record = append(record, "")
-					}
-				}
-
+				record := buildCSVRecord(pod, &c, cfg, r.Summary.Timestamp)
 				if err := writer.Write(record); err != nil {
 					fmt.Fprintf(os.Stderr, "Error writing CSV record: %v\n", err)
 					continue
@@ -169,46 +135,92 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 		}
 
 		// Fallback: emit one row for the pod without specific container
-		record := []string{
-			r.Summary.Timestamp.Format(time.RFC3339),
-			getMemoryStatus(pod, cfg),
-			pod.Namespace,
-			pod.PodName,
-			pod.Phase,
-			strconv.FormatBool(pod.Ready),
-			formatBytesForCSV(pod.CurrentUsage),
-			formatBytesForCSV(pod.MemoryRequest),
-			formatBytesForCSV(pod.MemoryLimit),
-			formatPercentForCSV(pod.UsagePercent),
-			formatPercentForCSV(pod.LimitUsagePercent),
-			"",
-		}
-
-		// Add label values
-		for _, label := range cfg.Labels {
-			if value, exists := pod.Labels[label]; exists {
-				record = append(record, value)
-			} else {
-				record = append(record, "")
-			}
-		}
-
-		// Add annotation values
-		for _, annotation := range cfg.Annotations {
-			if value, exists := pod.Annotations[annotation]; exists {
-				// Clean annotation values for CSV (remove newlines and quotes)
-				cleanValue := strings.ReplaceAll(strings.ReplaceAll(value, "\n", " "), "\r", " ")
-				record = append(record, cleanValue)
-			} else {
-				record = append(record, "")
-			}
-		}
-
+		record := buildCSVRecordForPod(pod, cfg, r.Summary.Timestamp)
 		if err := writer.Write(record); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing CSV record: %v\n", err)
 			continue
 		}
 	}
+}
+
+// buildCSVRecord creates a CSV record for a container within a pod
+func buildCSVRecord(pod *k8s.PodMemoryInfo, container *k8s.ContainerMemoryInfo, cfg *config.Config, timestamp time.Time) []string {
+	record := []string{
+		timestamp.Format(time.RFC3339),
+		getMemoryStatus(pod, cfg),
+		pod.Namespace,
+		pod.PodName,
+		pod.Phase,
+		strconv.FormatBool(pod.Ready),
+		formatBytesForCSV(container.CurrentUsage),
+		formatBytesForCSV(container.MemoryRequest),
+		formatBytesForCSV(container.MemoryLimit),
+		formatPercentForCSV(container.UsagePercent),
+		formatPercentForCSV(container.LimitUsagePercent),
+		container.ContainerName,
+	}
+
+	// Add label values
+	for _, label := range cfg.Labels {
+		if value, exists := pod.Labels[label]; exists {
+			record = append(record, value)
+		} else {
+			record = append(record, "")
+		}
+	}
+
+	// Add annotation values
+	for _, annotation := range cfg.Annotations {
+		if value, exists := pod.Annotations[annotation]; exists {
+			// Clean annotation values for CSV (remove newlines and quotes)
+			cleanValue := strings.ReplaceAll(strings.ReplaceAll(value, "\n", " "), "\r", " ")
+			record = append(record, cleanValue)
+		} else {
+			record = append(record, "")
+		}
+	}
+
+	return record
+}
+
+// buildCSVRecordForPod creates a CSV record for a pod without container breakdown
+func buildCSVRecordForPod(pod *k8s.PodMemoryInfo, cfg *config.Config, timestamp time.Time) []string {
+	record := []string{
+		timestamp.Format(time.RFC3339),
+		getMemoryStatus(pod, cfg),
+		pod.Namespace,
+		pod.PodName,
+		pod.Phase,
+		strconv.FormatBool(pod.Ready),
+		formatBytesForCSV(pod.CurrentUsage),
+		formatBytesForCSV(pod.MemoryRequest),
+		formatBytesForCSV(pod.MemoryLimit),
+		formatPercentForCSV(pod.UsagePercent),
+		formatPercentForCSV(pod.LimitUsagePercent),
+		"", // empty container_name for pod-level record
+	}
+
+	// Add label values
+	for _, label := range cfg.Labels {
+		if value, exists := pod.Labels[label]; exists {
+			record = append(record, value)
+		} else {
+			record = append(record, "")
+		}
+	}
+
+	// Add annotation values
+	for _, annotation := range cfg.Annotations {
+		if value, exists := pod.Annotations[annotation]; exists {
+			// Clean annotation values for CSV (remove newlines and quotes)
+			cleanValue := strings.ReplaceAll(strings.ReplaceAll(value, "\n", " "), "\r", " ")
+			record = append(record, cleanValue)
+		} else {
+			record = append(record, "")
+		}
+	}
+
+	return record
 }
 
 // Helper functions for CSV formatting

@@ -345,6 +345,144 @@ func TestPrintCSV_PerContainerRows(t *testing.T) {
 	}
 }
 
+func TestBuildCSVRecord(t *testing.T) {
+	cfg := &config.Config{
+		Labels:               []string{"env", "team"},
+		Annotations:          []string{"deployment.kubernetes.io/revision"},
+		MemoryWarningPercent: 80.0,
+	}
+
+	timestamp := time.Date(2023, 12, 1, 10, 0, 0, 0, time.UTC)
+
+	pod := &k8s.PodMemoryInfo{
+		PodName:   "test-pod",
+		Namespace: "default",
+		Phase:     "Running",
+		Ready:     true,
+		Labels: map[string]string{
+			"env":  "production",
+			"team": "backend",
+		},
+		Annotations: map[string]string{
+			"deployment.kubernetes.io/revision": "5",
+		},
+	}
+
+	container := &k8s.ContainerMemoryInfo{
+		ContainerName:     "app-container",
+		CurrentUsage:      resource.NewQuantity(100*1024*1024, resource.BinarySI), // 100MB
+		MemoryRequest:     resource.NewQuantity(200*1024*1024, resource.BinarySI), // 200MB
+		MemoryLimit:       resource.NewQuantity(400*1024*1024, resource.BinarySI), // 400MB
+		UsagePercent:      func() *float64 { v := 50.0; return &v }(),
+		LimitUsagePercent: func() *float64 { v := 25.0; return &v }(),
+	}
+
+	// Calculate the actual values that will be returned
+	expectedStatus := getMemoryStatus(pod, cfg)
+	expectedUsageBytes := formatBytesForCSV(container.CurrentUsage)
+	expectedRequestBytes := formatBytesForCSV(container.MemoryRequest)
+	expectedLimitBytes := formatBytesForCSV(container.MemoryLimit)
+	expectedUsagePercent := formatPercentForCSV(container.UsagePercent)
+	expectedLimitUsagePercent := formatPercentForCSV(container.LimitUsagePercent)
+
+	expected := []string{
+		"2023-12-01T10:00:00Z",
+		expectedStatus,
+		"default",
+		"test-pod",
+		"Running",
+		"true",
+		expectedUsageBytes,
+		expectedRequestBytes,
+		expectedLimitBytes,
+		expectedUsagePercent,
+		expectedLimitUsagePercent,
+		"app-container",
+		"production", // env label
+		"backend",    // team label
+		"5",          // revision annotation
+	}
+
+	result := buildCSVRecord(pod, container, cfg, timestamp)
+
+	if len(result) != len(expected) {
+		t.Fatalf("Expected %d fields, got %d", len(expected), len(result))
+	}
+
+	for i, exp := range expected {
+		if result[i] != exp {
+			t.Errorf("Field %d: expected '%s', got '%s'", i, exp, result[i])
+		}
+	}
+}
+
+func TestBuildCSVRecordForPod(t *testing.T) {
+	cfg := &config.Config{
+		Labels:               []string{"app", "version"},
+		Annotations:          []string{"kubernetes.io/managed-by"},
+		MemoryWarningPercent: 80.0,
+	}
+
+	timestamp := time.Date(2023, 12, 1, 15, 30, 0, 0, time.UTC)
+
+	pod := &k8s.PodMemoryInfo{
+		PodName:           "standalone-pod",
+		Namespace:         "production",
+		Phase:             "Running",
+		Ready:             true,
+		CurrentUsage:      resource.NewQuantity(300*1024*1024, resource.BinarySI),  // 300MB
+		MemoryRequest:     resource.NewQuantity(500*1024*1024, resource.BinarySI),  // 500MB
+		MemoryLimit:       resource.NewQuantity(1000*1024*1024, resource.BinarySI), // 1000MB
+		UsagePercent:      func() *float64 { v := 60.0; return &v }(),
+		LimitUsagePercent: func() *float64 { v := 30.0; return &v }(),
+		Labels: map[string]string{
+			"app":     "web-server",
+			"version": "v1.2.3",
+		},
+		Annotations: map[string]string{
+			"kubernetes.io/managed-by": "Deployment",
+		},
+	}
+
+	// Calculate the actual values that will be returned
+	expectedPodStatus := getMemoryStatus(pod, cfg)
+	expectedPodUsageBytes := formatBytesForCSV(pod.CurrentUsage)
+	expectedPodRequestBytes := formatBytesForCSV(pod.MemoryRequest)
+	expectedPodLimitBytes := formatBytesForCSV(pod.MemoryLimit)
+	expectedPodUsagePercent := formatPercentForCSV(pod.UsagePercent)
+	expectedPodLimitUsagePercent := formatPercentForCSV(pod.LimitUsagePercent)
+
+	expected := []string{
+		"2023-12-01T15:30:00Z",
+		expectedPodStatus,
+		"production",
+		"standalone-pod",
+		"Running",
+		"true",
+		expectedPodUsageBytes,
+		expectedPodRequestBytes,
+		expectedPodLimitBytes,
+		expectedPodUsagePercent,
+		expectedPodLimitUsagePercent,
+		"",           // empty container_name for pod-level record
+		"web-server", // app label
+		"v1.2.3",     // version label
+		"Deployment", // managed-by annotation
+	}
+
+	result := buildCSVRecordForPod(pod, cfg, timestamp)
+
+	if len(result) != len(expected) {
+		t.Fatalf("Expected %d fields, got %d", len(expected), len(result))
+	}
+
+	for i, exp := range expected {
+		if result[i] != exp {
+			t.Errorf("Field %d: expected '%s', got '%s'", i, exp, result[i])
+		}
+	}
+}
+
 func TestPrintAnalysis_FiltersPartialLimitPods(t *testing.T) {
 	cfg := &config.Config{MemoryWarningPercent: 80.0}
 
