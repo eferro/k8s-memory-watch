@@ -57,3 +57,6 @@ coverage.out
 
 .cursorindexingignore
 .specstory/
+
+# Ignore local kubeconfigs
+kubeconfig*
