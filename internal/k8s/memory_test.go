@@ -107,3 +107,21 @@ func TestProcessContainerMemoryInfo_PopulatesFields(t *testing.T) {
 		t.Fatalf("usage not set")
 	}
 }
+
+func TestAggregatePodResources_SumsValues(t *testing.T) {
+	r1 := resource.MustParse("100Mi")
+	l1 := resource.MustParse("200Mi")
+	r2 := resource.MustParse("50Mi")
+	containers := []ContainerMemoryInfo{{MemoryRequest: &r1, MemoryLimit: &l1}, {MemoryRequest: &r2}}
+	c := &Client{}
+	req, lim, hasReq, hasLim := c.aggregatePodResources(containers)
+	if !hasReq || hasLim {
+		t.Fatalf("wrong flags")
+	}
+	if req == nil || req.Value() != int64(150*1024*1024) {
+		t.Fatalf("wrong request")
+	}
+	if lim != nil {
+		t.Fatalf("limit should be nil")
+	}
+}

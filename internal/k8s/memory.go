@@ -206,6 +206,34 @@ func (c *Client) processContainerMemoryInfo(container *corev1.Container, usage c
 	return info, req, lim, info.MemoryRequest != nil, info.MemoryLimit != nil
 }
 
+func (c *Client) aggregatePodResources(containers []ContainerMemoryInfo) (*resource.Quantity, *resource.Quantity, bool, bool) {
+	var reqTotal, limTotal int64
+	hasReq, hasLim := true, true
+	for i := range containers {
+		cInfo := &containers[i]
+		if cInfo.MemoryRequest != nil {
+			reqTotal += cInfo.MemoryRequest.Value()
+		} else {
+			hasReq = false
+		}
+		if cInfo.MemoryLimit != nil {
+			limTotal += cInfo.MemoryLimit.Value()
+		} else {
+			hasLim = false
+		}
+	}
+	var reqQ, limQ *resource.Quantity
+	if hasReq {
+		v := *resource.NewQuantity(reqTotal, resource.BinarySI)
+		reqQ = &v
+	}
+	if hasLim {
+		v := *resource.NewQuantity(limTotal, resource.BinarySI)
+		limQ = &v
+	}
+	return reqQ, limQ, hasReq, hasLim
+}
+
 // processPodMemoryInfo creates PodMemoryInfo from pod spec and metrics
 func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.PodMetrics) PodMemoryInfo {
 	podInfo := PodMemoryInfo{
@@ -226,10 +254,6 @@ func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.P
 		podInfo.Annotations[k] = v
 	}
 
-	// Extract memory limits and requests from all containers
-	var totalRequest, totalLimit int64
-	hasRequest, hasLimit := true, true
-
 	// Build a map of metrics by container name
 	metricsByName := make(map[string]corev1.ResourceList)
 	if metrics != nil {
@@ -242,19 +266,16 @@ func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.P
 	for i := range pod.Spec.Containers {
 		container := &pod.Spec.Containers[i]
 		usage := metricsByName[container.Name]
-		cm, req, lim, hasReq, hasLim := c.processContainerMemoryInfo(container, usage)
-		totalRequest += req
-		totalLimit += lim
-		hasRequest = hasRequest && hasReq
-		hasLimit = hasLimit && hasLim
+		cm, _, _, _, _ := c.processContainerMemoryInfo(container, usage)
 		podInfo.Containers = append(podInfo.Containers, cm)
 	}
 
-	if hasRequest {
-		podInfo.MemoryRequest = resource.NewQuantity(totalRequest, resource.BinarySI)
+	req, lim, hasReq, hasLim := c.aggregatePodResources(podInfo.Containers)
+	if hasReq {
+		podInfo.MemoryRequest = req
 	}
-	if hasLimit {
-		podInfo.MemoryLimit = resource.NewQuantity(totalLimit, resource.BinarySI)
+	if hasLim {
+		podInfo.MemoryLimit = lim
 	}
 
 	// Extract current usage from metrics
