@@ -51,7 +51,7 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	// Clean up after test
 	defer func() {
 		for key := range testCases {
-			os.Unsetenv(key)
+			_ = os.Unsetenv(key)
 		}
 	}()
 

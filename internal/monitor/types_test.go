@@ -331,7 +331,7 @@ func TestPrintCSV_PerContainerRows(t *testing.T) {
 
 	report.PrintCSV(cfg, true)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	buf := new(strings.Builder)
 	_, _ = io.Copy(buf, r)
@@ -383,7 +383,7 @@ func TestPrintAnalysis_FiltersPartialLimitPods(t *testing.T) {
 
 	analysis.PrintAnalysis(cfg)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	buf := new(strings.Builder)
 	_, _ = io.Copy(buf, r)

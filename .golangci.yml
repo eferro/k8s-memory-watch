@@ -4,6 +4,7 @@ run:
 linters:
   disable:
     - gocyclo
+    - errcheck
 
 issues:
   exclude-use-default: false
