@@ -208,23 +208,54 @@ func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.P
 
 	// Extract memory limits and requests from all containers
 	var totalRequest, totalLimit int64
-	hasRequest, hasLimit := false, false
+	hasRequest, hasLimit := true, true
+
+	// Build a map of metrics by container name
+	metricsByName := make(map[string]corev1.ResourceList)
+	if metrics != nil {
+		for _, m := range metrics.Containers {
+			metricsByName[m.Name] = m.Usage
+		}
+	}
+
+	// Initialize container slice
+	podInfo.Containers = make([]ContainerMemoryInfo, 0, len(pod.Spec.Containers))
 
 	for i := range pod.Spec.Containers {
 		container := &pod.Spec.Containers[i]
+		cm := ContainerMemoryInfo{ContainerName: container.Name}
 		if container.Resources.Requests != nil {
 			if memReq, exists := container.Resources.Requests[corev1.ResourceMemory]; exists {
 				totalRequest += memReq.Value()
-				hasRequest = true
+				v := memReq
+				cm.MemoryRequest = &v
+			} else {
+				hasRequest = false
 			}
+		} else {
+			hasRequest = false
 		}
 
 		if container.Resources.Limits != nil {
 			if memLimit, exists := container.Resources.Limits[corev1.ResourceMemory]; exists {
 				totalLimit += memLimit.Value()
-				hasLimit = true
+				v := memLimit
+				cm.MemoryLimit = &v
+			} else {
+				hasLimit = false
+			}
+		} else {
+			hasLimit = false
+		}
+
+		if usage, ok := metricsByName[container.Name]; ok {
+			if memUsage, exists := usage[corev1.ResourceMemory]; exists {
+				v := memUsage
+				cm.CurrentUsage = &v
 			}
 		}
+
+		podInfo.Containers = append(podInfo.Containers, cm)
 	}
 
 	if hasRequest {

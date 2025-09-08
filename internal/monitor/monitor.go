@@ -159,6 +159,10 @@ func (m *MemoryMonitor) AnalyzeMemoryUsage(ctx context.Context) (*AnalysisResult
 		}
 	}
 
+	// Include container-level findings
+	containerAnalysis := analyzeReport(&analysis.Report, m.config)
+	analysis.ProblemsFound = append(analysis.ProblemsFound, containerAnalysis.ProblemsFound...)
+
 	if m.config.Output != config.OutputFormatCSV {
 		slog.Info("Memory analysis completed",
 			"warning_pods", len(analysis.WarningPods),
@@ -167,4 +171,58 @@ func (m *MemoryMonitor) AnalyzeMemoryUsage(ctx context.Context) (*AnalysisResult
 	}
 
 	return analysis, nil
+}
+
+func analyzeReport(report *MemoryReport, cfg *config.Config) *AnalysisResult {
+	analysis := &AnalysisResult{
+		Report:        *report,
+		HighUsagePods: []k8s.PodMemoryInfo{},
+		WarningPods:   []k8s.PodMemoryInfo{},
+		ProblemsFound: []string{},
+	}
+
+	for i := range report.Pods {
+		pod := &report.Pods[i]
+
+		// Analyze per-container first
+		for _, c := range pod.Containers {
+			c.CalculateUsagePercent()
+
+			if c.LimitUsagePercent != nil && *c.LimitUsagePercent >= 90.0 {
+				analysis.ProblemsFound = append(analysis.ProblemsFound,
+					fmt.Sprintf(
+						"Pod %s/%s container %s is using %.1f%% of its memory limit",
+						pod.Namespace,
+						pod.PodName,
+						c.ContainerName,
+						*c.LimitUsagePercent,
+					),
+				)
+			}
+
+			if c.UsagePercent != nil && *c.UsagePercent >= cfg.MemoryWarningPercent {
+				analysis.ProblemsFound = append(analysis.ProblemsFound,
+					fmt.Sprintf(
+						"Pod %s/%s container %s is using %.1f%% of its memory request",
+						pod.Namespace,
+						pod.PodName,
+						c.ContainerName,
+						*c.UsagePercent,
+					),
+				)
+			}
+
+			if c.MemoryLimit == nil {
+				analysis.ProblemsFound = append(analysis.ProblemsFound,
+					fmt.Sprintf("Pod %s/%s container %s has no memory limit defined", pod.Namespace, pod.PodName, c.ContainerName))
+			}
+
+			if c.MemoryRequest == nil {
+				analysis.ProblemsFound = append(analysis.ProblemsFound,
+					fmt.Sprintf("Pod %s/%s container %s has no memory request defined", pod.Namespace, pod.PodName, c.ContainerName))
+			}
+		}
+	}
+
+	return analysis
 }

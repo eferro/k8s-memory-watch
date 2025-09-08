@@ -31,6 +31,9 @@ type PodMemoryInfo struct {
 	// Metadata information
 	Labels      map[string]string `json:"labels,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Containers breakdown
+	Containers []ContainerMemoryInfo `json:"containers,omitempty"`
 }
 
 // MemorySummary provides cluster-wide memory statistics
@@ -45,6 +48,37 @@ type MemorySummary struct {
 	TotalMemoryLimit   resource.Quantity `json:"total_memory_limit"`
 	TotalMemoryRequest resource.Quantity `json:"total_memory_request"`
 	NamespaceCount     int               `json:"namespace_count"`
+}
+
+// ContainerMemoryInfo contains memory information for a single container
+type ContainerMemoryInfo struct {
+	ContainerName     string             `json:"container_name"`
+	CurrentUsage      *resource.Quantity `json:"current_usage,omitempty"`
+	MemoryRequest     *resource.Quantity `json:"memory_request,omitempty"`
+	MemoryLimit       *resource.Quantity `json:"memory_limit,omitempty"`
+	UsagePercent      *float64           `json:"usage_percent,omitempty"`       // Usage vs Request
+	LimitUsagePercent *float64           `json:"limit_usage_percent,omitempty"` // Usage vs Limit
+}
+
+// CalculateUsagePercent calculates usage percentage against request or limit for a container
+func (c *ContainerMemoryInfo) CalculateUsagePercent() {
+	if c.CurrentUsage == nil {
+		return
+	}
+
+	currentValue := float64(c.CurrentUsage.Value())
+
+	if c.MemoryRequest != nil && c.MemoryRequest.Value() > 0 {
+		requestValue := float64(c.MemoryRequest.Value())
+		percent := (currentValue / requestValue) * 100
+		c.UsagePercent = &percent
+	}
+
+	if c.MemoryLimit != nil && c.MemoryLimit.Value() > 0 {
+		limitValue := float64(c.MemoryLimit.Value())
+		percent := (currentValue / limitValue) * 100
+		c.LimitUsagePercent = &percent
+	}
 }
 
 // FormatMemory formats a memory quantity in human-readable format

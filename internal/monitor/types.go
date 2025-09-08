@@ -14,6 +14,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+const (
+	limitStateAll     = "All"
+	limitStatePartial = "Partial"
+	limitStateNone    = "None"
+)
+
 // MemoryReport contains the complete memory report for the cluster
 type MemoryReport struct {
 	Summary k8s.MemorySummary   `json:"summary"`
@@ -42,12 +48,6 @@ func (r *MemoryReport) PrintSummary() {
 	fmt.Printf("  Pods with Metrics: %d\n", r.Summary.PodsWithMetrics)
 	fmt.Printf("  Pods with Limits: %d\n", r.Summary.PodsWithLimits)
 	fmt.Printf("  Pods with Requests: %d\n", r.Summary.PodsWithRequests)
-	fmt.Printf("\n")
-
-	fmt.Printf("Memory Totals:\n")
-	fmt.Printf("  Total Usage: %s\n", k8s.FormatMemory(&r.Summary.TotalMemoryUsage))
-	fmt.Printf("  Total Requests: %s\n", k8s.FormatMemory(&r.Summary.TotalMemoryRequest))
-	fmt.Printf("  Total Limits: %s\n", k8s.FormatMemory(&r.Summary.TotalMemoryLimit))
 	fmt.Printf("\n")
 }
 
@@ -96,6 +96,7 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 			"limit_bytes",
 			"usage_percent",
 			"limit_usage_percent",
+			"container_name",
 		}
 
 		// Add label columns
@@ -120,6 +121,54 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 		pod := &r.Pods[i]
 		pod.CalculateUsagePercent()
 
+		// If we have container breakdown, emit one row per container
+		if len(pod.Containers) > 0 {
+			for _, c := range pod.Containers {
+				c.CalculateUsagePercent()
+				record := []string{
+					r.Summary.Timestamp.Format(time.RFC3339),
+					getMemoryStatus(pod, cfg),
+					pod.Namespace,
+					pod.PodName,
+					pod.Phase,
+					strconv.FormatBool(pod.Ready),
+					formatBytesForCSV(c.CurrentUsage),
+					formatBytesForCSV(c.MemoryRequest),
+					formatBytesForCSV(c.MemoryLimit),
+					formatPercentForCSV(c.UsagePercent),
+					formatPercentForCSV(c.LimitUsagePercent),
+					c.ContainerName,
+				}
+
+				// Add label values
+				for _, label := range cfg.Labels {
+					if value, exists := pod.Labels[label]; exists {
+						record = append(record, value)
+					} else {
+						record = append(record, "")
+					}
+				}
+
+				// Add annotation values
+				for _, annotation := range cfg.Annotations {
+					if value, exists := pod.Annotations[annotation]; exists {
+						// Clean annotation values for CSV (remove newlines and quotes)
+						cleanValue := strings.ReplaceAll(strings.ReplaceAll(value, "\n", " "), "\r", " ")
+						record = append(record, cleanValue)
+					} else {
+						record = append(record, "")
+					}
+				}
+
+				if err := writer.Write(record); err != nil {
+					fmt.Fprintf(os.Stderr, "Error writing CSV record: %v\n", err)
+					continue
+				}
+			}
+			continue
+		}
+
+		// Fallback: emit one row for the pod without specific container
 		record := []string{
 			r.Summary.Timestamp.Format(time.RFC3339),
 			getMemoryStatus(pod, cfg),
@@ -132,6 +181,7 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 			formatBytesForCSV(pod.MemoryLimit),
 			formatPercentForCSV(pod.UsagePercent),
 			formatPercentForCSV(pod.LimitUsagePercent),
+			"",
 		}
 
 		// Add label values
@@ -234,19 +284,38 @@ func (a *AnalysisResult) PrintAnalysis(cfg *config.Config) {
 		}
 	}
 
-	if len(a.HighUsagePods) > 0 {
-		fmt.Printf("\n🔥 High Memory Usage Pods (%d):\n", len(a.HighUsagePods))
-		for i := range a.HighUsagePods {
-			pod := &a.HighUsagePods[i]
+	// Filter pods to only those with All limits for pod-level sections
+	filterAllLimited := func(pods []k8s.PodMemoryInfo) []k8s.PodMemoryInfo {
+		if len(pods) == 0 {
+			return pods
+		}
+		result := make([]k8s.PodMemoryInfo, 0, len(pods))
+		for i := range pods {
+			p := pods[i]
+			lim, _ := limitState(&p)
+			if lim == limitStateAll {
+				result = append(result, p)
+			}
+		}
+		return result
+	}
+
+	filteredHigh := filterAllLimited(a.HighUsagePods)
+	filteredWarn := filterAllLimited(a.WarningPods)
+
+	if len(filteredHigh) > 0 {
+		fmt.Printf("\n🔥 High Memory Usage Pods (%d):\n", len(filteredHigh))
+		for i := range filteredHigh {
+			pod := &filteredHigh[i]
 			fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 		}
 	}
 
-	if len(a.WarningPods) > 0 {
-		fmt.Printf("\n⚠️  Warning Level Pods (%d):\n", len(a.WarningPods))
-		for i := range a.WarningPods {
-			pod := &a.WarningPods[i]
-			if !contains(a.HighUsagePods, pod) {
+	if len(filteredWarn) > 0 {
+		fmt.Printf("\n⚠️  Warning Level Pods (%d):\n", len(filteredWarn))
+		for i := range filteredWarn {
+			pod := &filteredWarn[i]
+			if !contains(filteredHigh, pod) {
 				fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
 			}
 		}
@@ -259,18 +328,18 @@ func (a *AnalysisResult) PrintAnalysis(cfg *config.Config) {
 // formatPodInfo formats a single pod's memory information
 func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 	pod.CalculateUsagePercent()
-
 	// Format pod state info for diagnostics
 	readyStatus := "Ready"
 	if !pod.Ready {
 		readyStatus = "NotReady"
 	}
 	stateInfo := fmt.Sprintf("[%s/%s]", pod.Phase, readyStatus)
+	limState, reqState := limitState(pod)
 
 	// If no memory metrics are available, show grey status (no info available)
 	if pod.CurrentUsage == nil {
 		status := "⚪"
-		baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
+		baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s) | Limits: %s | Requests: %s",
 			status,
 			fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
 			stateInfo,
@@ -279,6 +348,8 @@ func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 			k8s.FormatPercent(pod.UsagePercent),
 			k8s.FormatMemory(pod.MemoryLimit),
 			k8s.FormatPercent(pod.LimitUsagePercent),
+			limState,
+			reqState,
 		)
 		// Add labels and annotations if requested
 		metadata := formatPodMetadata(pod, cfg)
@@ -296,7 +367,7 @@ func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 		status = "🟡"
 	}
 
-	baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s)",
+	baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s) | Limits: %s | Requests: %s",
 		status,
 		fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
 		stateInfo,
@@ -305,14 +376,43 @@ func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 		k8s.FormatPercent(pod.UsagePercent),
 		k8s.FormatMemory(pod.MemoryLimit),
 		k8s.FormatPercent(pod.LimitUsagePercent),
+		limState,
+		reqState,
 	)
 
-	// Add labels and annotations if requested
+	// Build sections: base, containers, metadata
+	var parts []string
+	parts = append(parts, baseInfo)
+
+	if len(pod.Containers) > 0 {
+		var b strings.Builder
+		b.WriteString("      🧩 Containers:")
+		for i := range pod.Containers {
+			c := pod.Containers[i]
+			c.CalculateUsagePercent()
+			b.WriteString("\n        - ")
+			b.WriteString(c.ContainerName)
+			b.WriteString(" | Usage: ")
+			b.WriteString(k8s.FormatMemory(c.CurrentUsage))
+			b.WriteString(" | Request: ")
+			b.WriteString(k8s.FormatMemory(c.MemoryRequest))
+			b.WriteString(" (")
+			b.WriteString(k8s.FormatPercent(c.UsagePercent))
+			b.WriteString(") | Limit: ")
+			b.WriteString(k8s.FormatMemory(c.MemoryLimit))
+			b.WriteString(" (")
+			b.WriteString(k8s.FormatPercent(c.LimitUsagePercent))
+			b.WriteString(")")
+		}
+		parts = append(parts, b.String())
+	}
+
 	metadata := formatPodMetadata(pod, cfg)
 	if metadata != "" {
-		return fmt.Sprintf("%s\n%s", baseInfo, metadata)
+		parts = append(parts, metadata)
 	}
-	return baseInfo
+
+	return strings.Join(parts, "\n")
 }
 
 // printRecommendations prints actionable recommendations based on the analysis
@@ -431,4 +531,43 @@ func contains(pods []k8s.PodMemoryInfo, target *k8s.PodMemoryInfo) bool {
 		}
 	}
 	return false
+}
+
+func limitState(pod *k8s.PodMemoryInfo) (limits, requests string) {
+	summarize := func(all bool, anyPresent bool) string {
+		switch {
+		case all:
+			return limitStateAll
+		case anyPresent:
+			return limitStatePartial
+		default:
+			return limitStateNone
+		}
+	}
+
+	if len(pod.Containers) == 0 {
+		limits = summarize(pod.MemoryLimit != nil, pod.MemoryLimit != nil)
+		requests = summarize(pod.MemoryRequest != nil, pod.MemoryRequest != nil)
+		return limits, requests
+	}
+
+	allLimits, anyLimits := true, false
+	allRequests, anyRequests := true, false
+	for i := range pod.Containers {
+		c := pod.Containers[i]
+		if c.MemoryLimit != nil {
+			anyLimits = true
+		} else {
+			allLimits = false
+		}
+		if c.MemoryRequest != nil {
+			anyRequests = true
+		} else {
+			allRequests = false
+		}
+	}
+
+	limits = summarize(allLimits, anyLimits)
+	requests = summarize(allRequests, anyRequests)
+	return limits, requests
 }

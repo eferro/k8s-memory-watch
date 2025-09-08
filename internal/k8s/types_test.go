@@ -179,6 +179,24 @@ func TestPodMemoryInfo_String(t *testing.T) {
 	}
 }
 
+func TestContainerMemoryInfo_CalculateUsagePercent(t *testing.T) {
+	container := ContainerMemoryInfo{
+		CurrentUsage:  resource.NewQuantity(1024*1024*75, resource.BinarySI),  // 75MB
+		MemoryRequest: resource.NewQuantity(1024*1024*50, resource.BinarySI),  // 50MB
+		MemoryLimit:   resource.NewQuantity(1024*1024*100, resource.BinarySI), // 100MB
+	}
+
+	container.CalculateUsagePercent()
+
+	if !floatEqual(container.UsagePercent, floatPtr(150.0)) {
+		t.Errorf("UsagePercent = %v, want %v", formatFloatPtr(container.UsagePercent), formatFloatPtr(floatPtr(150.0)))
+	}
+
+	if !floatEqual(container.LimitUsagePercent, floatPtr(75.0)) {
+		t.Errorf("LimitUsagePercent = %v, want %v", formatFloatPtr(container.LimitUsagePercent), formatFloatPtr(floatPtr(75.0)))
+	}
+}
+
 // Helper functions
 
 func floatPtr(f float64) *float64 {

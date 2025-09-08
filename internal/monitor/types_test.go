@@ -1,8 +1,11 @@
 package monitor
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eduardoferro/k8s-memory-watch/internal/config"
 	"github.com/eduardoferro/k8s-memory-watch/internal/k8s"
@@ -244,5 +247,152 @@ func TestGetMemoryStatus(t *testing.T) {
 				t.Errorf("getMemoryStatus() = %v, want %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestFormatPodInfo_IncludesContainerIdentifiers(t *testing.T) {
+	cfg := &config.Config{Labels: []string{}, Annotations: []string{}}
+
+	pod := k8s.PodMemoryInfo{
+		Namespace:     "default",
+		PodName:       "multi",
+		Phase:         "Running",
+		Ready:         true,
+		CurrentUsage:  func() *resource.Quantity { q := resource.MustParse("300Mi"); return &q }(),
+		MemoryRequest: func() *resource.Quantity { q := resource.MustParse("600Mi"); return &q }(),
+		MemoryLimit:   func() *resource.Quantity { q := resource.MustParse("1Gi"); return &q }(),
+	}
+
+	pod.Containers = []k8s.ContainerMemoryInfo{
+		{
+			ContainerName: "app",
+			CurrentUsage:  resource.NewQuantity(1024*1024*200, resource.BinarySI), // 200Mi approx
+			MemoryRequest: resource.NewQuantity(1024*1024*300, resource.BinarySI),
+			MemoryLimit:   resource.NewQuantity(1024*1024*512, resource.BinarySI),
+		},
+		{
+			ContainerName: "sidecar",
+			CurrentUsage:  resource.NewQuantity(1024*1024*100, resource.BinarySI), // 100Mi approx
+			MemoryRequest: nil,
+			MemoryLimit:   nil,
+		},
+	}
+
+	out := formatPodInfo(&pod, cfg)
+	if !strings.Contains(out, "default/multi") {
+		t.Fatalf("base pod info missing")
+	}
+	if !strings.Contains(out, "app") || !strings.Contains(out, "sidecar") {
+		t.Fatalf("expected container names in output, got: %s", out)
+	}
+}
+
+func TestFormatPodInfo_ShowsLimitState(t *testing.T) {
+	cfg := &config.Config{}
+	pod := k8s.PodMemoryInfo{
+		Namespace: "ns",
+		PodName:   "p",
+		Phase:     "Running",
+		Ready:     true,
+		Containers: []k8s.ContainerMemoryInfo{
+			{ContainerName: "a", MemoryLimit: resource.NewQuantity(1024*1024*256, resource.BinarySI)},
+			{ContainerName: "b"},
+		},
+	}
+	out := formatPodInfo(&pod, cfg)
+	if !strings.Contains(out, "Limit state: Partial") && !strings.Contains(out, "Limits: Partial") {
+		t.Fatalf("expected Partial limit state in output, got: %s", out)
+	}
+}
+
+func TestPrintCSV_PerContainerRows(t *testing.T) {
+	cfg := &config.Config{Output: config.OutputFormatCSV}
+
+	report := MemoryReport{
+		Summary: k8s.MemorySummary{Timestamp: time.Now()},
+		Pods: []k8s.PodMemoryInfo{
+			{
+				Namespace: "ns",
+				PodName:   "p1",
+				Phase:     "Running",
+				Ready:     true,
+				Containers: []k8s.ContainerMemoryInfo{
+					{ContainerName: "a"},
+					{ContainerName: "b"},
+				},
+			},
+		},
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	report.PrintCSV(cfg, true)
+
+	w.Close()
+	os.Stdout = oldStdout
+	buf := new(strings.Builder)
+	_, _ = io.Copy(buf, r)
+
+	out := buf.String()
+	if !strings.Contains(out, "container_name") {
+		t.Fatalf("expected container_name header, got: %s", out)
+	}
+	if !strings.Contains(out, ",ns,p1,Running,true,,,,,,a") || !strings.Contains(out, ",ns,p1,Running,true,,,,,,b") {
+		t.Fatalf("expected two rows for containers a and b, got: %s", out)
+	}
+}
+
+func TestPrintAnalysis_FiltersPartialLimitPods(t *testing.T) {
+	cfg := &config.Config{MemoryWarningPercent: 80.0}
+
+	podAll := k8s.PodMemoryInfo{
+		Namespace: "ns", PodName: "all", Phase: "Running", Ready: true,
+		CurrentUsage:  resource.NewQuantity(950*1024*1024, resource.BinarySI),
+		MemoryRequest: resource.NewQuantity(1000*1024*1024, resource.BinarySI),
+		MemoryLimit:   resource.NewQuantity(1000*1024*1024, resource.BinarySI),
+		Containers:    []k8s.ContainerMemoryInfo{{ContainerName: "c", MemoryLimit: resource.NewQuantity(1, resource.BinarySI), MemoryRequest: resource.NewQuantity(1, resource.BinarySI)}},
+	}
+	podAll.CalculateUsagePercent()
+
+	podPartial := k8s.PodMemoryInfo{
+		Namespace: "ns", PodName: "partial", Phase: "Running", Ready: true,
+		CurrentUsage:  resource.NewQuantity(900*1024*1024, resource.BinarySI),
+		MemoryRequest: nil, // pod-level absent due to not all containers requesting
+		MemoryLimit:   nil, // absent due to partial limits
+		Containers: []k8s.ContainerMemoryInfo{
+			{ContainerName: "a", MemoryLimit: resource.NewQuantity(1, resource.BinarySI)},
+			{ContainerName: "b"},
+		},
+	}
+	podPartial.CalculateUsagePercent()
+
+	analysis := &AnalysisResult{
+		Report:        MemoryReport{Pods: []k8s.PodMemoryInfo{podAll, podPartial}},
+		HighUsagePods: []k8s.PodMemoryInfo{podAll, podPartial},
+		WarningPods:   []k8s.PodMemoryInfo{podAll, podPartial},
+		ProblemsFound: []string{"dummy"},
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	analysis.PrintAnalysis(cfg)
+
+	w.Close()
+	os.Stdout = oldStdout
+	buf := new(strings.Builder)
+	_, _ = io.Copy(buf, r)
+	out := buf.String()
+
+	if strings.Contains(out, "partial") {
+		t.Fatalf("expected pod with Partial limits to be omitted from High/Warning sections, got: %s", out)
+	}
+	if !strings.Contains(out, "all") {
+		t.Fatalf("expected pod with All limits to appear, got: %s", out)
 	}
 }
