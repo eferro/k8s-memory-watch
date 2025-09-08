@@ -5,29 +5,53 @@ on:
     workflows: [CI]
     types: [completed]
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    outputs:
+      create_release: ${{ steps.version.outputs.create_release }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set version from tag
+      - name: Check for tag and set version
         id: version
         run: |
-          REF=${{ github.ref_name }}
-          echo "tag=${REF}" >> "$GITHUB_OUTPUT"
+          # Get the commit SHA from the workflow run
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "Checking for tags on commit: $COMMIT_SHA"
+          
+          # Check if there's a tag pointing to this commit
+          TAG=$(git tag --points-at $COMMIT_SHA | head -1)
+          
+          if [ -n "$TAG" ]; then
+            echo "Found tag: $TAG"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "create_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No tag found for commit $COMMIT_SHA"
+            echo "create_release=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create GitHub Release
+        if: steps.version.outputs.create_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
 
   build-and-upload:
     needs: create-release
+    if: needs.create-release.outputs.create_release == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -54,27 +78,33 @@ jobs:
           mkdir -p build/dist
           GOOS=$OS GOARCH=$ARCH go build -ldflags "-s -w" -o build/dist/k8s-memory-watch-$OS-$ARCH$EXT ./cmd/k8s-memory-watch
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: k8s-memory-watch-${{ matrix.os }}-${{ matrix.arch }}
-          path: build/dist/*
-
-  create-checksums:
-    needs: build-and-upload
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: build/dist
-
-      - name: Generate checksums
-        run: |
-          cd build/dist
-          shasum -a 256 * > checksums.txt
-
-      - name: Upload checksums
+      - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/dist/checksums.txt
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          files: build/dist/*
+
+  create-checksums:
+    needs: [create-release, build-and-upload]
+    if: needs.create-release.outputs.create_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release assets and generate checksums
+        run: |
+          TAG="${{ needs.create-release.outputs.tag }}"
+          mkdir -p checksums
+          cd checksums
+          
+          # Download all assets from the release
+          gh release download $TAG --repo ${{ github.repository }}
+          
+          # Generate checksums
+          shasum -a 256 * > SHA256SUMS
+          
+          # Upload checksums back to release
+          gh release upload $TAG SHA256SUMS --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
