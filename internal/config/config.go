@@ -54,14 +54,23 @@ func Load() (*Config, error) {
 // LoadWithCLI loads configuration from environment variables and CLI flags
 // CLI flags take precedence over environment variables
 func LoadWithCLI(cli *CLIConfig) (*Config, error) {
-	cfg := &Config{
-		// Default values from environment variables
+	cfg := defaultConfigFromEnv()
+	applyCLIOverrides(cfg, cli)
+	applyDefaultNamespace(cfg)
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+	return cfg, nil
+}
+
+func defaultConfigFromEnv() *Config {
+	return &Config{
 		Namespace:            getEnv("NAMESPACE", ""),
 		AllNamespaces:        getEnvBool("ALL_NAMESPACES", false),
 		KubeConfig:           getEnv("KUBECONFIG", ""),
 		InCluster:            getEnvBool("IN_CLUSTER", false),
 		CheckInterval:        getEnvDuration("CHECK_INTERVAL", "30s"),
-		MemoryThresholdMB:    getEnvInt64("MEMORY_THRESHOLD_MB", 1024), // 1GB default
+		MemoryThresholdMB:    getEnvInt64("MEMORY_THRESHOLD_MB", 1024),
 		MemoryWarningPercent: getEnvFloat("MEMORY_WARNING_PERCENT", 80.0),
 		LogLevel:             getEnv("LOG_LEVEL", "info"),
 		LogFormat:            getEnv("LOG_FORMAT", "json"),
@@ -69,57 +78,71 @@ func LoadWithCLI(cli *CLIConfig) (*Config, error) {
 		Annotations:          parseCommaSeparated(getEnv("ANNOTATIONS", "")),
 		Output:               getEnv("OUTPUT", "table"),
 	}
+}
 
-	// Apply CLI flags (they override environment variables)
-	if cli != nil {
-		if cli.Namespace != "" {
-			cfg.Namespace = cli.Namespace
-		}
-		if cli.AllNamespaces {
-			cfg.AllNamespaces = cli.AllNamespaces
-		}
-		if cli.KubeConfig != "" {
-			cfg.KubeConfig = cli.KubeConfig
-		}
-		if cli.InCluster {
-			cfg.InCluster = cli.InCluster
-		}
-		if cli.CheckInterval != 0 {
-			cfg.CheckInterval = cli.CheckInterval
-		}
-		if cli.MemoryThresholdMB != 0 {
-			cfg.MemoryThresholdMB = cli.MemoryThresholdMB
-		}
-		if cli.MemoryWarningPercent != 0 {
-			cfg.MemoryWarningPercent = cli.MemoryWarningPercent
-		}
-		if cli.LogLevel != "" {
-			cfg.LogLevel = cli.LogLevel
-		}
-		if cli.Labels != "" {
-			cfg.Labels = parseCommaSeparated(cli.Labels)
-		}
-		if cli.Annotations != "" {
-			cfg.Annotations = parseCommaSeparated(cli.Annotations)
-		}
-		if cli.Output != "" {
-			cfg.Output = cli.Output
-		}
+func applyCLIOverrides(cfg *Config, cli *CLIConfig) {
+	if cli == nil {
+		return
 	}
+	overrideNamespace(cfg, cli)
+	overrideKubeConfig(cfg, cli)
+	overrideIntervals(cfg, cli)
+	overrideLogging(cfg, cli)
+	overrideDisplay(cfg, cli)
+}
 
-	// Apply default behavior for namespace selection
-	if cfg.Namespace == "" && !cfg.AllNamespaces {
-		// If no specific namespace and not explicitly all-namespaces,
-		// default to all namespaces (Kubernetes-style behavior)
+func overrideNamespace(cfg *Config, cli *CLIConfig) {
+	if cli.Namespace != "" {
+		cfg.Namespace = cli.Namespace
+	}
+	if cli.AllNamespaces {
 		cfg.AllNamespaces = true
 	}
+}
 
-	// Validate configuration
-	if err := cfg.validate(); err != nil {
-		return nil, fmt.Errorf("configuration validation failed: %w", err)
+func overrideKubeConfig(cfg *Config, cli *CLIConfig) {
+	if cli.KubeConfig != "" {
+		cfg.KubeConfig = cli.KubeConfig
 	}
+	if cli.InCluster {
+		cfg.InCluster = true
+	}
+}
 
-	return cfg, nil
+func overrideIntervals(cfg *Config, cli *CLIConfig) {
+	if cli.CheckInterval != 0 {
+		cfg.CheckInterval = cli.CheckInterval
+	}
+	if cli.MemoryThresholdMB != 0 {
+		cfg.MemoryThresholdMB = cli.MemoryThresholdMB
+	}
+	if cli.MemoryWarningPercent != 0 {
+		cfg.MemoryWarningPercent = cli.MemoryWarningPercent
+	}
+}
+
+func overrideLogging(cfg *Config, cli *CLIConfig) {
+	if cli.LogLevel != "" {
+		cfg.LogLevel = cli.LogLevel
+	}
+	if cli.Output != "" {
+		cfg.Output = cli.Output
+	}
+}
+
+func overrideDisplay(cfg *Config, cli *CLIConfig) {
+	if cli.Labels != "" {
+		cfg.Labels = parseCommaSeparated(cli.Labels)
+	}
+	if cli.Annotations != "" {
+		cfg.Annotations = parseCommaSeparated(cli.Annotations)
+	}
+}
+
+func applyDefaultNamespace(cfg *Config) {
+	if cfg.Namespace == "" && !cfg.AllNamespaces {
+		cfg.AllNamespaces = true
+	}
 }
 
 // validate checks that the configuration is valid
