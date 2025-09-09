@@ -278,22 +278,25 @@ func (c *Client) processPodMemoryInfo(pod *corev1.Pod, metrics *metricsv1beta1.P
 		podInfo.MemoryLimit = lim
 	}
 
-	// Extract current usage from metrics
-	if metrics != nil {
-		var totalUsage int64
-		for _, container := range metrics.Containers {
-			if container.Usage != nil {
-				if memUsage, exists := container.Usage[corev1.ResourceMemory]; exists {
-					totalUsage += memUsage.Value()
-				}
-			}
-		}
-		if totalUsage > 0 {
-			podInfo.CurrentUsage = resource.NewQuantity(totalUsage, resource.BinarySI)
-		}
-	}
+	podInfo.CurrentUsage = c.calculatePodUsageFromMetrics(metrics)
 
 	return podInfo
+}
+
+func (c *Client) calculatePodUsageFromMetrics(metrics *metricsv1beta1.PodMetrics) *resource.Quantity {
+	if metrics == nil {
+		return nil
+	}
+	var total int64
+	for i := range metrics.Containers {
+		if usage, ok := metrics.Containers[i].Usage[corev1.ResourceMemory]; ok {
+			total += usage.Value()
+		}
+	}
+	if total == 0 {
+		return nil
+	}
+	return resource.NewQuantity(total, resource.BinarySI)
 }
 
 // isPodReady checks if a pod is ready

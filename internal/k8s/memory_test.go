@@ -125,3 +125,17 @@ func TestAggregatePodResources_SumsValues(t *testing.T) {
 		t.Fatalf("limit should be nil")
 	}
 }
+
+func TestCalculatePodUsageFromMetrics_SumsUsage(t *testing.T) {
+	metrics := &metricsv1beta1.PodMetrics{
+		Containers: []metricsv1beta1.ContainerMetrics{
+			{Usage: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("100Mi")}},
+			{Usage: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("200Mi")}},
+		},
+	}
+	c := &Client{}
+	usage := c.calculatePodUsageFromMetrics(metrics)
+	if usage == nil || usage.Value() != int64(300*1024*1024) {
+		t.Fatalf("wrong usage")
+	}
+}
