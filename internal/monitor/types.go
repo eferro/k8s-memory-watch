@@ -339,48 +339,40 @@ func (a *AnalysisResult) PrintAnalysis(cfg *config.Config) {
 
 // formatPodInfo formats a single pod's memory information
 func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
+	var parts []string
+	parts = append(parts, formatPodBaseInfo(pod))
+	if c := formatContainerSection(pod.Containers); c != "" {
+		parts = append(parts, c)
+	}
+	if m := formatMetadataSection(pod, cfg); m != "" {
+		parts = append(parts, m)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func podStatusSymbol(pod *k8s.PodMemoryInfo) string {
+	if pod.CurrentUsage == nil {
+		return "⚪"
+	}
+	if pod.Ready && pod.Phase == "Running" {
+		return "🟢"
+	}
+	if pod.Phase == "Pending" {
+		return "🟡"
+	}
+	return "🔴"
+}
+
+func formatPodBaseInfo(pod *k8s.PodMemoryInfo) string {
 	pod.CalculateUsagePercent()
-	// Format pod state info for diagnostics
 	readyStatus := "Ready"
 	if !pod.Ready {
 		readyStatus = "NotReady"
 	}
 	stateInfo := fmt.Sprintf("[%s/%s]", pod.Phase, readyStatus)
 	limState, reqState := limitState(pod)
-
-	// If no memory metrics are available, show grey status (no info available)
-	if pod.CurrentUsage == nil {
-		status := "⚪"
-		baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s) | Limits: %s | Requests: %s",
-			status,
-			fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
-			stateInfo,
-			k8s.FormatMemory(pod.CurrentUsage),
-			k8s.FormatMemory(pod.MemoryRequest),
-			k8s.FormatPercent(pod.UsagePercent),
-			k8s.FormatMemory(pod.MemoryLimit),
-			k8s.FormatPercent(pod.LimitUsagePercent),
-			limState,
-			reqState,
-		)
-		// Add labels and annotations if requested
-		metadata := formatPodMetadata(pod, cfg)
-		if metadata != "" {
-			return fmt.Sprintf("%s\n%s", baseInfo, metadata)
-		}
-		return baseInfo
-	}
-
-	// Normal status logic when we have memory metrics
-	status := "🔴"
-	if pod.Ready && pod.Phase == "Running" {
-		status = "🟢"
-	} else if pod.Phase == "Pending" {
-		status = "🟡"
-	}
-
-	baseInfo := fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s) | Limits: %s | Requests: %s",
-		status,
+	return fmt.Sprintf("%s %s %s | Usage: %s | Request: %s (%s) | Limit: %s (%s) | Limits: %s | Requests: %s",
+		podStatusSymbol(pod),
 		fmt.Sprintf("%s/%s", pod.Namespace, pod.PodName),
 		stateInfo,
 		k8s.FormatMemory(pod.CurrentUsage),
@@ -391,16 +383,6 @@ func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 		limState,
 		reqState,
 	)
-
-	var parts []string
-	parts = append(parts, baseInfo)
-	if c := formatContainerSection(pod.Containers); c != "" {
-		parts = append(parts, c)
-	}
-	if m := formatPodMetadata(pod, cfg); m != "" {
-		parts = append(parts, m)
-	}
-	return strings.Join(parts, "\n")
 }
 
 func formatContainerSection(containers []k8s.ContainerMemoryInfo) string {
@@ -458,8 +440,8 @@ func printRecommendations(a *AnalysisResult) {
 	fmt.Printf("• Regular monitoring recommended with current threshold: %.1f%%\n", 80.0)
 }
 
-// formatPodMetadata formats labels and annotations for display based on configuration
-func formatPodMetadata(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
+// formatMetadataSection formats labels and annotations for display based on configuration
+func formatMetadataSection(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 	// Only show metadata if specifically requested
 	if len(cfg.Labels) == 0 && len(cfg.Annotations) == 0 {
 		return ""
