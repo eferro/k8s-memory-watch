@@ -1,9 +1,7 @@
 package monitor
 
 import (
-	"encoding/csv"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,69 +76,8 @@ func (r *MemoryReport) PrintDetailedReport(cfg *config.Config) {
 
 // PrintCSV prints pod memory information in CSV format
 func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
-	writer := csv.NewWriter(os.Stdout)
-	defer writer.Flush()
-
-	// Write header only if requested (first time)
-	if showHeader {
-		// Create dynamic header based on requested labels and annotations
-		header := []string{
-			"timestamp",
-			"memory_status",
-			"namespace",
-			"pod_name",
-			"phase",
-			"ready",
-			"usage_bytes",
-			"request_bytes",
-			"limit_bytes",
-			"usage_percent",
-			"limit_usage_percent",
-			"container_name",
-		}
-
-		// Add label columns
-		for _, label := range cfg.Labels {
-			header = append(header, "label_"+strings.ReplaceAll(label, ".", "_"))
-		}
-
-		// Add annotation columns
-		for _, annotation := range cfg.Annotations {
-			header = append(header, "annotation_"+strings.ReplaceAll(annotation, ".", "_"))
-		}
-
-		// Write header
-		if err := writer.Write(header); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing CSV header: %v\n", err)
-			return
-		}
-	}
-
-	// Write pod data
-	for i := range r.Pods {
-		pod := &r.Pods[i]
-		pod.CalculateUsagePercent()
-
-		// If we have container breakdown, emit one row per container
-		if len(pod.Containers) > 0 {
-			for _, c := range pod.Containers {
-				c.CalculateUsagePercent()
-				record := buildCSVRecord(pod, &c, cfg, r.Summary.Timestamp)
-				if err := writer.Write(record); err != nil {
-					fmt.Fprintf(os.Stderr, "Error writing CSV record: %v\n", err)
-					continue
-				}
-			}
-			continue
-		}
-
-		// Fallback: emit one row for the pod without specific container
-		record := buildCSVRecordForPod(pod, cfg, r.Summary.Timestamp)
-		if err := writer.Write(record); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing CSV record: %v\n", err)
-			continue
-		}
-	}
+	formatter := NewCSVFormatter()
+	formatter.FormatReport(r, cfg, showHeader)
 }
 
 // buildCSVRecord creates a CSV record for a container within a pod
@@ -283,58 +220,8 @@ func getMemoryStatus(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 
 // PrintAnalysis prints the analysis results with warnings and recommendations
 func (a *AnalysisResult) PrintAnalysis(cfg *config.Config) {
-	fmt.Printf("\n")
-	fmt.Printf("=== Memory Usage Analysis ===\n")
-
-	if len(a.ProblemsFound) == 0 {
-		fmt.Printf("✅ No memory issues detected.\n")
-	} else {
-		fmt.Printf("🚨 Found %d potential issues:\n\n", len(a.ProblemsFound))
-
-		for i, problem := range a.ProblemsFound {
-			fmt.Printf("%d. %s\n", i+1, problem)
-		}
-	}
-
-	// Filter pods to only those with All limits for pod-level sections
-	filterAllLimited := func(pods []k8s.PodMemoryInfo) []k8s.PodMemoryInfo {
-		if len(pods) == 0 {
-			return pods
-		}
-		result := make([]k8s.PodMemoryInfo, 0, len(pods))
-		for i := range pods {
-			p := pods[i]
-			lim, _ := limitState(&p)
-			if lim == limitStateAll {
-				result = append(result, p)
-			}
-		}
-		return result
-	}
-
-	filteredHigh := filterAllLimited(a.HighUsagePods)
-	filteredWarn := filterAllLimited(a.WarningPods)
-
-	if len(filteredHigh) > 0 {
-		fmt.Printf("\n🔥 High Memory Usage Pods (%d):\n", len(filteredHigh))
-		for i := range filteredHigh {
-			pod := &filteredHigh[i]
-			fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
-		}
-	}
-
-	if len(filteredWarn) > 0 {
-		fmt.Printf("\n⚠️  Warning Level Pods (%d):\n", len(filteredWarn))
-		for i := range filteredWarn {
-			pod := &filteredWarn[i]
-			if !contains(filteredHigh, pod) {
-				fmt.Printf("  %s\n", formatPodInfo(pod, cfg))
-			}
-		}
-	}
-
-	fmt.Printf("\n")
-	printRecommendations(a)
+	reporter := NewAnalysisReporter()
+	reporter.PrintAnalysis(a, cfg)
 }
 
 // formatPodInfo formats a single pod's memory information
