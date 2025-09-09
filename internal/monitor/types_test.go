@@ -180,6 +180,23 @@ func TestFormatContainerSection_FormatsContainers(t *testing.T) {
 	}
 }
 
+func TestFormatPodBaseInfo_FormatsBasicInfo(t *testing.T) {
+	pod := k8s.PodMemoryInfo{
+		PodName:       "app",
+		Namespace:     "default",
+		Phase:         "Running",
+		Ready:         true,
+		CurrentUsage:  resource.NewQuantity(50*1024*1024, resource.BinarySI),
+		MemoryRequest: resource.NewQuantity(100*1024*1024, resource.BinarySI),
+		MemoryLimit:   resource.NewQuantity(200*1024*1024, resource.BinarySI),
+	}
+	result := formatPodBaseInfo(&pod)
+	expected := "🟢 default/app [Running/Ready] | Usage: 50.0 MB | Request: 100.0 MB (50.0%) | Limit: 200.0 MB (25.0%) | Limits: All | Requests: All"
+	if result != expected {
+		t.Fatalf("expected %q, got %q", expected, result)
+	}
+}
+
 func TestGetMemoryStatus(t *testing.T) {
 	cfg := &config.Config{
 		MemoryWarningPercent: 80.0,
