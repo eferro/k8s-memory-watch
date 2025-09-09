@@ -53,9 +53,9 @@ record := []string{
 - [x] **Write Tests**: Create tests for new extracted functions
 - [x] **Extract processContainerMemoryInfo**: Handle individual container processing
 - [x] **Extract aggregatePodResources**: Handle resource aggregation logic
-- [ ] **Extract calculatePodUsageFromMetrics**: Handle usage calculation
-- [ ] **Refactor Main Function**: Update processPodMemoryInfo to use helpers
-- [ ] **Verify Tests Pass**: Ensure all existing tests still pass
+- [x] **Extract calculatePodUsageFromMetrics**: Handle usage calculation
+- [x] **Refactor Main Function**: Update processPodMemoryInfo to use helpers
+- [x] **Verify Tests Pass**: Ensure all existing tests still pass
 - [ ] **Performance Test**: Verify no performance regression
 
 **Details**:
