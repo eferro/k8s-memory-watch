@@ -177,45 +177,51 @@ func formatPercentForCSV(percent *float64) string {
 
 // getMemoryStatus determines the memory status of a pod for CSV output
 func getMemoryStatus(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
-	// No metrics available
 	if pod.CurrentUsage == nil {
 		return "no_data"
 	}
 
-	// Check for missing configurations first
-	if pod.MemoryRequest == nil && pod.MemoryLimit == nil {
-		return "no_config"
+	if status, missing := missingConfigStatus(pod); missing {
+		return status
 	}
 
-	if pod.MemoryRequest == nil {
-		return "no_request"
-	}
-
-	if pod.MemoryLimit == nil {
-		return "no_limit"
-	}
-
-	// Critical level checks (highest priority)
-	if pod.UsagePercent != nil && *pod.UsagePercent >= 95.0 {
+	if isCritical(pod) {
 		return "critical"
 	}
 
-	if pod.LimitUsagePercent != nil && *pod.LimitUsagePercent >= 90.0 {
-		return "critical"
-	}
-
-	// Warning level check
-	if pod.UsagePercent != nil && *pod.UsagePercent >= cfg.MemoryWarningPercent {
+	if isWarning(pod, cfg) {
 		return "warning"
 	}
 
-	// Pod not running properly
 	if !pod.Ready || pod.Phase != "Running" {
 		return "not_ready"
 	}
 
-	// Everything looks good
 	return "ok"
+}
+
+func missingConfigStatus(pod *k8s.PodMemoryInfo) (string, bool) {
+	switch {
+	case pod.MemoryRequest == nil && pod.MemoryLimit == nil:
+		return "no_config", true
+	case pod.MemoryRequest == nil:
+		return "no_request", true
+	case pod.MemoryLimit == nil:
+		return "no_limit", true
+	default:
+		return "", false
+	}
+}
+
+func isCritical(pod *k8s.PodMemoryInfo) bool {
+	if pod.UsagePercent != nil && *pod.UsagePercent >= 95.0 {
+		return true
+	}
+	return pod.LimitUsagePercent != nil && *pod.LimitUsagePercent >= 90.0
+}
+
+func isWarning(pod *k8s.PodMemoryInfo, cfg *config.Config) bool {
+	return pod.UsagePercent != nil && *pod.UsagePercent >= cfg.MemoryWarningPercent
 }
 
 // PrintAnalysis prints the analysis results with warnings and recommendations

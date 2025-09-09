@@ -171,3 +171,17 @@ func TestNamespaceLogic(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadWithCLI_LabelAnnotationOverride(t *testing.T) {
+	cli := &CLIConfig{Labels: "app,team", Annotations: "owner"}
+	cfg, err := LoadWithCLI(cli)
+	if err != nil {
+		t.Fatalf("LoadWithCLI() failed: %v", err)
+	}
+	if len(cfg.Labels) != 2 || cfg.Labels[0] != "app" || cfg.Labels[1] != "team" {
+		t.Errorf("expected labels [app team], got %v", cfg.Labels)
+	}
+	if len(cfg.Annotations) != 1 || cfg.Annotations[0] != "owner" {
+		t.Errorf("expected annotations [owner], got %v", cfg.Annotations)
+	}
+}
