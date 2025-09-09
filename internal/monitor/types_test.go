@@ -565,3 +565,14 @@ func TestPrintAnalysis_FiltersPartialLimitPods(t *testing.T) {
 		t.Fatalf("expected pod with All limits to appear, got: %s", out)
 	}
 }
+func TestFormatRequestedAnnotations_TruncatesLongValues(t *testing.T) {
+	annotations := map[string]string{"key": strings.Repeat("a", 100)}
+	result := formatRequestedAnnotations(annotations, []string{"key"})
+	expected := "key: " + strings.Repeat("a", 77) + "..."
+	if len(result) != 1 {
+		t.Fatalf("expected one annotation, got %d", len(result))
+	}
+	if result[0] != expected {
+		t.Errorf("expected %q, got %q", expected, result[0])
+	}
+}
