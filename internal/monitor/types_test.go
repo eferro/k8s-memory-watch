@@ -166,6 +166,20 @@ func TestFormatPodInfo_NoMetricsOverridesStatus(t *testing.T) {
 	}
 }
 
+func TestFormatContainerSection_FormatsContainers(t *testing.T) {
+	c := k8s.ContainerMemoryInfo{
+		ContainerName: "app",
+		CurrentUsage:  resource.NewQuantity(100*1024*1024, resource.BinarySI),
+		MemoryRequest: resource.NewQuantity(200*1024*1024, resource.BinarySI),
+		MemoryLimit:   resource.NewQuantity(400*1024*1024, resource.BinarySI),
+	}
+	result := formatContainerSection([]k8s.ContainerMemoryInfo{c})
+	expected := "- app | Usage: 100.0 MB | Request: 200.0 MB (50.0%) | Limit: 400.0 MB (25.0%)"
+	if !strings.Contains(result, expected) {
+		t.Fatalf("expected %q in %q", expected, result)
+	}
+}
+
 func TestGetMemoryStatus(t *testing.T) {
 	cfg := &config.Config{
 		MemoryWarningPercent: 80.0,

@@ -80,10 +80,10 @@ func (c *Client) calculatePodUsageFromMetrics(metrics *metricsv1beta1.PodMetrics
 ## ⚠️ Priority 2: Important Refactoring (Medium Impact, Low Risk)
 
 ### TASK-003: Refactor formatPodInfo Function
-- [ ] **Analysis Complete**: Large formatting function identified
-- [ ] **Write Tests**: Create tests for formatting sections
+- [x] **Analysis Complete**: Large formatting function identified
+- [x] **Write Tests**: Create tests for formatting sections
 - [ ] **Extract formatPodBaseInfo**: Handle basic pod information formatting
-- [ ] **Extract formatContainerSection**: Handle container details formatting
+- [x] **Extract formatContainerSection**: Handle container details formatting
 - [ ] **Extract formatMetadataSection**: Handle labels and annotations
 - [ ] **Refactor Main Function**: Update formatPodInfo to use helpers
 - [ ] **Verify Output**: Ensure formatted output is identical

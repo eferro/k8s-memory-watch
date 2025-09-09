@@ -392,39 +392,34 @@ func formatPodInfo(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 		reqState,
 	)
 
-	// Build sections: base, containers, metadata
 	var parts []string
 	parts = append(parts, baseInfo)
-
-	if len(pod.Containers) > 0 {
-		var b strings.Builder
-		b.WriteString("      🧩 Containers:")
-		for i := range pod.Containers {
-			c := pod.Containers[i]
-			c.CalculateUsagePercent()
-			b.WriteString("\n        - ")
-			b.WriteString(c.ContainerName)
-			b.WriteString(" | Usage: ")
-			b.WriteString(k8s.FormatMemory(c.CurrentUsage))
-			b.WriteString(" | Request: ")
-			b.WriteString(k8s.FormatMemory(c.MemoryRequest))
-			b.WriteString(" (")
-			b.WriteString(k8s.FormatPercent(c.UsagePercent))
-			b.WriteString(") | Limit: ")
-			b.WriteString(k8s.FormatMemory(c.MemoryLimit))
-			b.WriteString(" (")
-			b.WriteString(k8s.FormatPercent(c.LimitUsagePercent))
-			b.WriteString(")")
-		}
-		parts = append(parts, b.String())
+	if c := formatContainerSection(pod.Containers); c != "" {
+		parts = append(parts, c)
 	}
-
-	metadata := formatPodMetadata(pod, cfg)
-	if metadata != "" {
-		parts = append(parts, metadata)
+	if m := formatPodMetadata(pod, cfg); m != "" {
+		parts = append(parts, m)
 	}
-
 	return strings.Join(parts, "\n")
+}
+
+func formatContainerSection(containers []k8s.ContainerMemoryInfo) string {
+	if len(containers) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("      🧩 Containers:")
+	for i := range containers {
+		c := containers[i]
+		c.CalculateUsagePercent()
+		b.WriteString("\n        - " + c.ContainerName)
+		b.WriteString(" | Usage: " + k8s.FormatMemory(c.CurrentUsage))
+		b.WriteString(" | Request: " + k8s.FormatMemory(c.MemoryRequest))
+		b.WriteString(" (" + k8s.FormatPercent(c.UsagePercent) + ") | Limit: ")
+		b.WriteString(k8s.FormatMemory(c.MemoryLimit))
+		b.WriteString(" (" + k8s.FormatPercent(c.LimitUsagePercent) + ")")
+	}
+	return b.String()
 }
 
 // printRecommendations prints actionable recommendations based on the analysis
