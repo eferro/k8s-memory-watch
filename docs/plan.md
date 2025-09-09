@@ -86,8 +86,8 @@ func (c *Client) calculatePodUsageFromMetrics(metrics *metricsv1beta1.PodMetrics
 - [x] **Extract formatContainerSection**: Handle container details formatting
 - [x] **Extract formatMetadataSection**: Handle labels and annotations
 - [x] **Refactor Main Function**: Update formatPodInfo to use helpers
-- [ ] **Verify Output**: Ensure formatted output is identical
-- [ ] **Test Edge Cases**: Test with various pod configurations
+- [x] **Verify Output**: Ensure formatted output is identical
+- [x] **Test Edge Cases**: Test with various pod configurations
 
 **Details**:
 - **File**: `internal/monitor/types.go`  
@@ -215,7 +215,7 @@ func hasMemoryResource(resources corev1.ResourceRequirements, resourceType corev
 - [ ] **Complete TASK-002**: processPodMemoryInfo - Extract container processing logic
 
 ### Phase 2: Important Refactoring (Week 2)  
-- [ ] **Complete TASK-003**: formatPodInfo - Split formatting responsibilities
+- [x] **Complete TASK-003**: formatPodInfo - Split formatting responsibilities
 - [ ] **Complete TASK-004**: LoadWithCLI - Separate configuration concerns
 
 ### Phase 3: Nice-to-Have (Week 3)
@@ -278,7 +278,7 @@ For each task:
 
 ### Overall Progress
 - [ ] **Phase 1 Complete** (1/2 tasks) - 50% ✅
-- [ ] **Phase 2 Complete** (0/2 tasks)  
+- [ ] **Phase 2 Complete** (1/2 tasks) - 50% ✅  
 - [ ] **Phase 3 Complete** (0/3 tasks)
 - [ ] **All Success Metrics Met**
 - [ ] **Documentation Updated**
