@@ -84,7 +84,7 @@ func (r *MemoryReport) PrintCSV(cfg *config.Config, showHeader bool) {
 func buildCSVRecord(pod *k8s.PodMemoryInfo, container *k8s.ContainerMemoryInfo, cfg *config.Config, timestamp time.Time) []string {
 	record := []string{
 		timestamp.Format(time.RFC3339),
-		getMemoryStatus(pod, cfg),
+		getContainerMemoryStatus(pod, container, cfg),
 		pod.Namespace,
 		pod.PodName,
 		pod.Phase,
@@ -200,6 +200,31 @@ func getMemoryStatus(pod *k8s.PodMemoryInfo, cfg *config.Config) string {
 	return "ok"
 }
 
+// getContainerMemoryStatus determines the memory status of a container for CSV output
+func getContainerMemoryStatus(pod *k8s.PodMemoryInfo, container *k8s.ContainerMemoryInfo, cfg *config.Config) string {
+	if container.CurrentUsage == nil {
+		return "no_data"
+	}
+
+	if status, missing := missingContainerConfigStatus(container); missing {
+		return status
+	}
+
+	if isContainerCritical(container) {
+		return "critical"
+	}
+
+	if isContainerWarning(container, cfg) {
+		return "warning"
+	}
+
+	if !pod.Ready || pod.Phase != "Running" {
+		return "not_ready"
+	}
+
+	return "ok"
+}
+
 func missingConfigStatus(pod *k8s.PodMemoryInfo) (string, bool) {
 	switch {
 	case pod.MemoryRequest == nil && pod.MemoryLimit == nil:
@@ -213,6 +238,19 @@ func missingConfigStatus(pod *k8s.PodMemoryInfo) (string, bool) {
 	}
 }
 
+func missingContainerConfigStatus(container *k8s.ContainerMemoryInfo) (string, bool) {
+	switch {
+	case container.MemoryRequest == nil && container.MemoryLimit == nil:
+		return "no_config", true
+	case container.MemoryRequest == nil:
+		return "no_request", true
+	case container.MemoryLimit == nil:
+		return "no_limit", true
+	default:
+		return "", false
+	}
+}
+
 func isCritical(pod *k8s.PodMemoryInfo) bool {
 	if pod.UsagePercent != nil && *pod.UsagePercent >= 95.0 {
 		return true
@@ -220,8 +258,19 @@ func isCritical(pod *k8s.PodMemoryInfo) bool {
 	return pod.LimitUsagePercent != nil && *pod.LimitUsagePercent >= 90.0
 }
 
+func isContainerCritical(container *k8s.ContainerMemoryInfo) bool {
+	if container.UsagePercent != nil && *container.UsagePercent >= 95.0 {
+		return true
+	}
+	return container.LimitUsagePercent != nil && *container.LimitUsagePercent >= 90.0
+}
+
 func isWarning(pod *k8s.PodMemoryInfo, cfg *config.Config) bool {
 	return pod.UsagePercent != nil && *pod.UsagePercent >= cfg.MemoryWarningPercent
+}
+
+func isContainerWarning(container *k8s.ContainerMemoryInfo, cfg *config.Config) bool {
+	return container.UsagePercent != nil && *container.UsagePercent >= cfg.MemoryWarningPercent
 }
 
 // PrintAnalysis prints the analysis results with warnings and recommendations

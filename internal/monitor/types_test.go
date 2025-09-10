@@ -409,7 +409,7 @@ func TestBuildCSVRecord(t *testing.T) {
 	}
 
 	// Calculate the actual values that will be returned
-	expectedStatus := getMemoryStatus(pod, cfg)
+	expectedStatus := getContainerMemoryStatus(pod, container, cfg)
 	expectedUsageBytes := formatBytesForCSV(container.CurrentUsage)
 	expectedRequestBytes := formatBytesForCSV(container.MemoryRequest)
 	expectedLimitBytes := formatBytesForCSV(container.MemoryLimit)

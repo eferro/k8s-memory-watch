@@ -60,3 +60,4 @@ coverage.out
 
 # Ignore local kubeconfigs
 kubeconfig*
+airflow-output.txt
