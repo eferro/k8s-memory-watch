@@ -20,6 +20,7 @@ type Config struct {
 	CheckInterval        time.Duration
 	MemoryThresholdMB    int64
 	MemoryWarningPercent float64
+	Watch                bool // true for continuous monitoring, false for single check
 
 	// Logging configuration
 	LogLevel  string
@@ -40,6 +41,7 @@ type CLIConfig struct {
 	CheckInterval        time.Duration
 	MemoryThresholdMB    int64
 	MemoryWarningPercent float64
+	Watch                bool // true for continuous monitoring, false for single check
 	LogLevel             string
 	Labels               string // Comma-separated list of labels to display
 	Annotations          string // Comma-separated list of annotations to display
@@ -72,6 +74,7 @@ func defaultConfigFromEnv() *Config {
 		CheckInterval:        getEnvDuration("CHECK_INTERVAL", "30s"),
 		MemoryThresholdMB:    getEnvInt64("MEMORY_THRESHOLD_MB", 1024),
 		MemoryWarningPercent: getEnvFloat("MEMORY_WARNING_PERCENT", 80.0),
+		Watch:                getEnvBool("WATCH", false),
 		LogLevel:             getEnv("LOG_LEVEL", "info"),
 		LogFormat:            getEnv("LOG_FORMAT", "json"),
 		Labels:               parseCommaSeparated(getEnv("LABELS", "")),
@@ -87,6 +90,7 @@ func applyCLIOverrides(cfg *Config, cli *CLIConfig) {
 	overrideNamespace(cfg, cli)
 	overrideKubeConfig(cfg, cli)
 	overrideIntervals(cfg, cli)
+	overrideMonitoring(cfg, cli)
 	overrideLogging(cfg, cli)
 	overrideDisplay(cfg, cli)
 }
@@ -118,6 +122,12 @@ func overrideIntervals(cfg *Config, cli *CLIConfig) {
 	}
 	if cli.MemoryWarningPercent != 0 {
 		cfg.MemoryWarningPercent = cli.MemoryWarningPercent
+	}
+}
+
+func overrideMonitoring(cfg *Config, cli *CLIConfig) {
+	if cli.Watch {
+		cfg.Watch = true
 	}
 }
 

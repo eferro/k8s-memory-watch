@@ -185,3 +185,44 @@ func TestLoadWithCLI_LabelAnnotationOverride(t *testing.T) {
 		t.Errorf("expected annotations [owner], got %v", cfg.Annotations)
 	}
 }
+
+func TestLoadWithCLI_WatchFlag(t *testing.T) {
+	testCases := []struct {
+		name          string
+		cli           *CLIConfig
+		expectedWatch bool
+		description   string
+	}{
+		{
+			name:          "watch flag enabled",
+			cli:           &CLIConfig{Watch: true},
+			expectedWatch: true,
+			description:   "When --watch is specified, Watch should be true",
+		},
+		{
+			name:          "watch flag disabled by default",
+			cli:           &CLIConfig{},
+			expectedWatch: false,
+			description:   "Default behavior should be Watch=false (single check)",
+		},
+		{
+			name:          "nil config defaults to single check",
+			cli:           nil,
+			expectedWatch: false,
+			description:   "Nil CLI config should default to single check mode",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := LoadWithCLI(tc.cli)
+			if err != nil {
+				t.Fatalf("LoadWithCLI() failed: %v", err)
+			}
+
+			if cfg.Watch != tc.expectedWatch {
+				t.Errorf("%s: Expected Watch %t, got %t", tc.description, tc.expectedWatch, cfg.Watch)
+			}
+		})
+	}
+}

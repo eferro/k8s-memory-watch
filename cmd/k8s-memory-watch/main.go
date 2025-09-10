@@ -35,6 +35,7 @@ func main() {
 		checkInterval   = flag.Duration("check-interval", 0, "Check interval (e.g., 30s, 1m)")
 		memoryThreshold = flag.Int64("memory-threshold", 0, "Memory threshold in MB")
 		memoryWarning   = flag.Float64("memory-warning", 0, "Memory warning percentage")
+		watch           = flag.Bool("watch", false, "Enable continuous monitoring (default: single check)")
 		logLevel        = flag.String("log-level", "", "Log level (debug, info, warn, error)")
 		labels          = flag.String("labels", "", "Comma-separated list of labels to display (e.g., dag_id,task_id,run_id)")
 		annotations     = flag.String("annotations", "", "Comma-separated list of annotations to display")
@@ -49,16 +50,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "OPTIONS:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Single check (default behavior)\n")
 		fmt.Fprintf(os.Stderr, "  %s --namespace=production\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --all-namespaces\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s --kubeconfig=/path/to/config --check-interval=1m\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\n  # Continuous monitoring\n")
+		fmt.Fprintf(os.Stderr, "  %s --watch --check-interval=1m\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --watch --namespace=production --check-interval=30s\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\n  # Other options\n")
 		fmt.Fprintf(os.Stderr, "  %s --labels=dag_id,task_id,run_id\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --annotations=owner,team --labels=app\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --output=csv --labels=app,version > pods.csv\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s --output=csv --all-namespaces > cluster-memory.csv\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --watch --output=csv --all-namespaces > cluster-memory.csv\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nEnvironment Variables (lower priority than CLI flags):\n")
 		fmt.Fprintf(os.Stderr, "  NAMESPACE, KUBECONFIG, IN_CLUSTER, CHECK_INTERVAL,\n")
-		fmt.Fprintf(os.Stderr, "  MEMORY_THRESHOLD_MB, MEMORY_WARNING_PERCENT, LOG_LEVEL\n")
+		fmt.Fprintf(os.Stderr, "  MEMORY_THRESHOLD_MB, MEMORY_WARNING_PERCENT, LOG_LEVEL, WATCH\n")
 	}
 
 	flag.Parse()
@@ -91,6 +96,7 @@ func main() {
 		CheckInterval:        *checkInterval,
 		MemoryThresholdMB:    *memoryThreshold,
 		MemoryWarningPercent: *memoryWarning,
+		Watch:                *watch,
 		LogLevel:             *logLevel,
 		Labels:               *labels,
 		Annotations:          *annotations,
@@ -150,16 +156,24 @@ func main() {
 		cancel()
 	}()
 
-	// Main application loop
-	if cfg.Output != config.OutputFormatCSV {
-		slog.Info("Starting monitoring loop...")
-	}
-
 	// Run initial collection and analysis
 	if err := runMemoryCheck(ctx, memMonitor, cfg); err != nil {
 		if cfg.Output != config.OutputFormatCSV {
 			slog.Error("Initial memory check failed", "error", err)
 		}
+	}
+
+	// Only continue with continuous monitoring if --watch flag is enabled
+	if !cfg.Watch {
+		if cfg.Output != config.OutputFormatCSV {
+			slog.Info("Single check completed. Use --watch for continuous monitoring.")
+		}
+		return
+	}
+
+	// Continuous monitoring mode
+	if cfg.Output != config.OutputFormatCSV {
+		slog.Info("Starting continuous monitoring loop...")
 	}
 
 	ticker := time.NewTicker(cfg.CheckInterval)
